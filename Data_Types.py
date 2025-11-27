@@ -79,7 +79,7 @@ class chart_details:
     def print_details(self):
         print(f"Name: {self.name}")
         print(f"Date: {self.date}-{self.month}-{self.year}")
-        print(f"Time: {self.hour}:{self.minute}:{self.second}")
+        print(f"Time: {self.hour}:{self.minute}:{self.second:.2f}")
         print(f"Longitude: {self.longitude_deg}° {self.longitude_min}' {self.longitude_sec}''")
         print(f"Latitude: {self.latitude_deg}° {self.latitude_min}' {self.latitude_sec}''")
         print(f"Timezone: {self.timezone} hours")

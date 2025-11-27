@@ -1,18 +1,31 @@
 import os
 from Data_Types import chart_details
 
-def get_time(t:str):
-    west=1
-    if(t[0]=='-'):
-        west=-1
-        t=t[1:]
+def get_time(t: str):
+    
+    t = t + "0000000"
+    west = 1
 
-    t=float(t)
-    hours=int(t//1)
-    minutes=(t-hours)*100
-    minutes_int=int(minutes//1)
-    seconds=(minutes-minutes_int)*100
-    return (hours + minutes_int / 60 + seconds / 3600)*west
+    if t[0] == "-":
+        west = -1
+        t = t[1:]
+
+    if "." in t:
+        hours_str, rest = t.split(".", 1)
+    else:   
+        hours_str, rest = t, ""
+
+    hours = int(hours_str)
+
+    minutes = int(rest[0:2]) if len(rest) >= 2 else 0
+    sec_whole = int(rest[2:4]) if len(rest) >= 4 else 0
+    sec_frac = float("0." + rest[4:]) if len(rest) >= 5 else 0.0
+
+    seconds = sec_whole + sec_frac
+
+
+    return (hours + minutes / 60 + seconds / 3600) * west
+
 
 
 
