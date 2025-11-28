@@ -163,6 +163,7 @@ class Horror_scope:
         for planet in [self.Sun, self.Moon, self.Mercury, self.Venus, self.Mars, self.Jupiter, self.Saturn, self.Rahu, self.Ketu]:
             planet.print_planet()
             print("")
+        print(f"Weekday: {self.weekday}")
 
 
 
