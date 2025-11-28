@@ -3,7 +3,7 @@ import swisseph as swe
 swe.set_ephe_path('ephe')
 swe.set_sid_mode(swe.SIDM_TRUE_CITRA)
 
-correction=(45-44)/60+(12.28-53.63)/3600
+#correction=(45-44)/60+(12.28-53.63)/3600
 
 PLANETS = {
     'Sun': swe.SUN,
