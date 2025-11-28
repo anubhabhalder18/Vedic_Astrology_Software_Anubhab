@@ -74,9 +74,10 @@ def make_horoscope(chart: chart_details):
         chart.date,
         chart.hour + chart.minute / 60 + chart.second / 3600 + chart.timezone
     )
-    wi=swe.day_of_week(jd_ut)
-    weekday_list=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
-    weekday=weekday_list[(wi+1)]
+    wi = swe.day_of_week(jd_ut)          # returns 0–6
+    weekday_list = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']
+    weekday = weekday_list[wi]           # safe direct index
+
     horoscope_obj = Horror_scope(
         ascendant=get_asc(chart),
         natal_chart=chart,
