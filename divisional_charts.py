@@ -41,7 +41,15 @@ def make_navamsa_horoscope(d1: Horror_scope) -> Horror_scope:
         Saturn=convert(d1.Saturn),
         Rahu=convert(d1.Rahu),
         Ketu=convert(d1.Ketu),
-        weekday=d1.weekday
+        weekday=d1.weekday,
+        date=d1.date,
+        month=d1.month,
+        year=d1.year,
+        hour=d1.hour,
+        minute=d1.minute,
+        second=d1.second,
+        longitude=d1.longitude,
+        latitude=d1.latitude,
     )
 
 def make_drekkana_horoscope(d1: Horror_scope) -> Horror_scope:
@@ -87,7 +95,15 @@ def make_drekkana_horoscope(d1: Horror_scope) -> Horror_scope:
         Saturn=convert(d1.Saturn),
         Rahu=convert(d1.Rahu),
         Ketu=convert(d1.Ketu),
-        weekday=d1.weekday
+        weekday=d1.weekday,
+        date=d1.date,
+        month=d1.month,
+        year=d1.year,
+        hour=d1.hour,
+        minute=d1.minute,
+        second=d1.second,
+        longitude=d1.longitude,
+        latitude=d1.latitude,
     )
 
 def make_d81_horoscope(d1: Horror_scope) -> Horror_scope:

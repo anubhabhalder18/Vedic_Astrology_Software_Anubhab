@@ -8,6 +8,10 @@ from dataclasses import dataclass
 
 from datetime import datetime, timedelta
 
+
+
+horoscope=0
+
 #############################################
 # ------------ DATA STRUCTURES -------------
 #############################################
@@ -234,8 +238,8 @@ def load_ast():
     lat=float(lines[4].split(":")[1])
     tz=float(lines[5].split(":")[1])
     alp=float(lines[6].split(":")[1])
-    return make_horoscope(chart_details(nm,d,m,y,h,mi,se,lon,lat,tz,alp))
-
+    horoscope=make_horoscope(chart_details(nm,d,m,y,h,mi,se,lon,lat,tz,alp))
+    return horoscope
 
 #############################################
 # ------------- TRANSIT WINDOW -------------
@@ -261,7 +265,7 @@ def open_transit_tab(root, natal):
         trans_cd = chart_details(cd.name+" Transit", d,m,y, cd.hour,cd.minute,cd.second,
                                  cd.longitude,cd.latitude,cd.timezone,cd.altidude)
         H = make_horoscope(trans_cd)
-
+        horoscope=H
         win = tk.Toplevel()
         win.title("Transit")
         c = tk.Canvas(win,width=690,height=690,bg="white")
@@ -278,7 +282,7 @@ def create_vimshottari_window(parent,d1: Horror_scope):
     dasha_root = tk.Toplevel(parent)
     dasha_root.title("Vimshottari Dasha — Single Window Explorer")
     dasha_root.geometry("1100x700")
-
+    d1=horoscope
     # ─────────────────────────────────────────────────────────────── Frames ──────────────────────────────────────
     left_frame = ttk.Frame(dasha_root)
     left_frame.pack(side="left", fill="y")
@@ -513,7 +517,9 @@ def create_vimshottari_window(parent,d1: Horror_scope):
 # --------------- MAIN UI ------------------
 #############################################
 
-def start_chart_menu(horoscope):
+
+from divisional_charts import *
+def start_chart_menu():
     root = tk.Tk()
     root.title("Astrology Toolkit")
     root.geometry("1100x840")
@@ -523,38 +529,77 @@ def start_chart_menu(horoscope):
     root.config(menu=menubar)
 
     chart_frame = tk.Frame(root, bg="white")
-    chart_frame.pack(fill="both",expand=True)
+    chart_frame.pack(fill="both", expand=True)
 
-    def show(h):
-        for w in chart_frame.winfo_children(): w.destroy()
-        cv = tk.Canvas(chart_frame,width=300,height=300,bg="white")
-        cv.pack()
-        draw_fixed_rashi_chart(h, size=200, canvas_override=cv)
+    # --- 2×2 layout always visible ---
+    def show_all_charts():
+        for w in chart_frame.winfo_children():
+            w.destroy()
 
+        rows = 2
+        cols = 2
+        chart_size = 260   # small chart for fitting inside grid
+        canv_w = canv_h = 260
+
+        # compute charts
+        charts = [
+            ("D1 Birth Chart", horoscope),
+            ("D9 Navamsa", make_navamsa_horoscope(horoscope)),
+            ("D3 Drekkana", make_drekkana_horoscope(horoscope)),
+            ("D81 Chart", make_d81_horoscope(horoscope))
+        ]
+
+        for idx, (label, hscope) in enumerate(charts):
+            r = idx // cols
+            c = idx % cols
+            frame = tk.Frame(chart_frame, bg="white")
+            frame.grid(row=r, column=c, padx=10, pady=10)
+
+            # chart title
+            tk.Label(frame, text=label, font=("Arial", 13, "bold"), bg="white").pack()
+
+            # chart canvas
+            cv = tk.Canvas(frame, width=canv_w, height=canv_h, bg="white", highlightthickness=0)
+            cv.pack()
+            draw_fixed_rashi_chart(hscope, size=chart_size, canvas_override=cv)
+
+    # menu – Chart section
     cm = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="Charts", menu=cm)
-    cm.add_command(label="D1 Birth Chart", command=lambda: show(horoscope))
-    cm.add_command(label="D9 Navamsa", command=lambda: show(make_navamsa_horoscope(horoscope)))
-    cm.add_command(label="D81", command=lambda: show(make_d81_horoscope(horoscope)))
-    from divisional_charts import make_drekkana_horoscope
-    cm.add_command(label="Drekkana", command=lambda: show(make_drekkana_horoscope(horoscope)))
+    cm.add_command(label="Show All Charts", command=show_all_charts)
+    cm.add_command(label="D1 (only)", command=lambda: show_one(horoscope))
+    cm.add_command(label="D9 (only)", command=lambda: show_one(make_navamsa_horoscope(horoscope)))
+    cm.add_command(label="D3 (only)", command=lambda: show_one(make_drekkana_horoscope(horoscope)))
+    cm.add_command(label="D81 (only)", command=lambda: show_one(make_d81_horoscope(horoscope)))
 
+    # single-chart view
+    def show_one(hscope):
+        for w in chart_frame.winfo_children():
+            w.destroy()
+        cv = tk.Canvas(chart_frame, width=700, height=700, bg="white")
+        cv.pack()
+        draw_fixed_rashi_chart(hscope, size=700, canvas_override=cv)
+
+    # file section
     fm = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="File", menu=fm)
     fm.add_command(label="Save as .ast", command=lambda: save_ast(horoscope))
-    fm.add_command(label="Open saved", command=lambda: show(load_ast()))
+    fm.add_command(label="Open saved", command=lambda: show_one(load_ast()))
     fm.add_command(label="Edit chart", command=lambda: edit_chart())
     fm.add_separator()
     fm.add_command(label="Exit", command=root.quit)
 
+    # dasha
     dm = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="Dasha", menu=dm)
     dm.add_command(label="Vimshottari Explorer", command=lambda: create_vimshottari_window(root, horoscope))
 
+    # transit
     tm = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="Transit", menu=tm)
     tm.add_command(label="Open Transit", command=lambda: open_transit_tab(root, horoscope))
 
+    # edit birth info popup
     def edit_chart():
         top = tk.Toplevel(root)
         top.title("Edit Birth Details")
@@ -569,7 +614,7 @@ def start_chart_menu(horoscope):
         ]
         for i,(lbl,val) in enumerate(arr):
             tk.Label(top,text=lbl).grid(row=i,column=0,sticky="w")
-            e=tk.Entry(top);e.insert(0,str(val));e.grid(row=i,column=1)
+            e=tk.Entry(top); e.insert(0,str(val)); e.grid(row=i,column=1)
             fields[lbl]=e
 
         def apply():
@@ -577,20 +622,18 @@ def start_chart_menu(horoscope):
                 v = e.get()
                 setattr(nc, lbl.lower(), v if lbl=="Name" else eval(v))
             newH = make_horoscope(nc)
-            show(newH)
+            show_all_charts()
             top.destroy()
         tk.Button(top,text="Apply",command=apply).grid(row=len(arr),columnspan=2,pady=5)
 
-    show(horoscope)
+    # show all charts on startup
+    show_all_charts()
     root.mainloop()
 
-
-#############################################
-# ---------------- START APP ----------------
-#############################################
 
 if __name__ == "__main__":
     # SAMPLE demo chart
     cd = chart_details("a",18,3,2004,22,4,44,88.36666,22.56666,-5.5,0.0)
     H = make_horoscope(cd)
-    start_chart_menu(H)
+    horoscope=H
+    start_chart_menu()
