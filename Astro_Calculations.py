@@ -113,4 +113,4 @@ if __name__ == "__main__":
     chart.print_details()
     nat_chart=make_horoscope(chart)
     nat_chart.print_horoscope()
-    start_chart_menu(nat_chart)    
+    start_chart_menu()    
