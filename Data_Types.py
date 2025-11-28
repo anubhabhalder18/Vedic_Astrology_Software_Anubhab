@@ -153,6 +153,14 @@ class Horror_scope:
     Rahu:Planet
     Ketu:Planet
     weekday:str
+    date:int
+    month:int
+    year:int
+    hour:int
+    minute:int
+    second:float
+    longitude:float
+    latitude:float
     
 
     def print_horoscope(self):
