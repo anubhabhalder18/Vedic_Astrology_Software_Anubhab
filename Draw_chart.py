@@ -57,8 +57,8 @@ NAK_LORDS = (VIMSHOTTARI_ORDER * 3)[:27]
 
 # Years of each Mahadasha
 DASHA_YEARS = {
-    "Ketu": 7,
-    "Venus": 20,
+    "Ketu": 7,# change to 7
+    "Venus": 20,# change to 20
     "Sun": 6,
     "Moon": 10,
     "Mars": 7,
@@ -535,9 +535,181 @@ def create_vimshottari_window(parent):
     build_mahadasha_tree()
 
 
+from divisional_charts import *
+
 # ------------------------------------------------
 # MAIN UI
 # ------------------------------------------------
+def create_custom_dasha_window(parent):
+    global horoscope
+    if horoscope is None:
+        messagebox.showerror("No Chart", "No horoscope loaded.")
+        return
+    d1: Horror_scope = horoscope
+
+    win = tk.Toplevel(parent)
+    win.title("Vimshottari Rajan dasa Explorer")
+    win.geometry("1100x720")
+    win.focus_set()
+
+    # STANDARD VIMSHOTTARI
+    VIM_STD_ORDER = ["Ketu", "Venus", "Sun", "Moon", "Mars",
+                     "Rahu", "Jupiter", "Saturn", "Mercury"]
+    VIM_STD_YEARS = {
+        "Ketu": 7, "Venus": 20, "Sun": 6, "Moon": 10, "Mars": 7,
+        "Rahu": 18, "Jupiter": 16, "Saturn": 19, "Mercury": 17
+    }
+    NAK_LORDS = (VIM_STD_ORDER * 3)[:27]
+    NAK_LEN = 360 / 27.0
+
+    # MOON FRACTION
+    def moon_nak_fraction():
+        lon = d1.Moon.planet_position.longitude % 360
+        idx = int(lon // NAK_LEN)
+        frac = (lon - idx * NAK_LEN) / NAK_LEN
+        return NAK_LORDS[idx], frac
+
+    # USER CONFIG
+    cfg = ttk.LabelFrame(win, text="Dasha Configuration")
+    cfg.pack(fill="x", padx=6, pady=5)
+
+    ttk.Label(cfg, text="Order #").grid(row=0, column=0)
+    ttk.Label(cfg, text="Planet").grid(row=0, column=1)
+    ttk.Label(cfg, text="Years").grid(row=0, column=2)
+
+    order_boxes = []
+    year_boxes = []
+    for i, lord in enumerate(VIM_STD_ORDER):
+        ttk.Label(cfg, text=str(i + 1)).grid(row=i + 1, column=0, sticky="e")
+        cb = ttk.Combobox(cfg, values=VIM_STD_ORDER, width=9, state="readonly")
+        cb.set(lord)
+        cb.grid(row=i + 1, column=1)
+        order_boxes.append(cb)
+
+        e = ttk.Entry(cfg, width=7)
+        e.insert(0, str(VIM_STD_YEARS[lord]))
+        e.grid(row=i + 1, column=2)
+        year_boxes.append(e)
+
+    def get_settings():
+        order = [cb.get() for cb in order_boxes]
+        years = {}
+        for cb, ent in zip(order_boxes, year_boxes):
+            lord = cb.get()
+            try:
+                years[lord] = float(ent.get())
+            except:
+                years[lord] = VIM_STD_YEARS[lord]
+        return order, years
+
+    # PANELS
+    main = ttk.Frame(win)
+    main.pack(fill="both", expand=True)
+
+    left = ttk.Frame(main)
+    left.pack(side="left", fill="both", expand=False)
+
+    right = ttk.Frame(main)
+    right.pack(side="right", fill="both", expand=True)
+
+    tree_scroll = ttk.Scrollbar(left, orient="vertical")
+    tree = ttk.Treeview(left, yscrollcommand=tree_scroll.set)
+    tree.heading("#0", text="Mahadasha / Antardasha")
+    tree.pack(side="left", fill="both", expand=True)
+    tree_scroll.config(command=tree.yview)
+    tree_scroll.pack(side="right", fill="y")
+
+    detail_frame = ttk.LabelFrame(right, text="Details")
+    detail_frame.pack(fill="both", expand=True)
+    details = tk.Text(detail_frame, wrap="word")
+    details.pack(fill="both", expand=True)
+
+    node_data = {}
+
+    # ------------------ BUILD MAHADASHA --------------------
+    def build_mahadasha():
+        tree.delete(*tree.get_children())
+        node_data.clear()
+        details.delete("1.0", "end")
+
+        order, years = get_settings()
+        moon_lord, frac = moon_nak_fraction()
+
+        birth = datetime(
+            d1.natal_chart.year, d1.natal_chart.month, d1.natal_chart.date,
+            d1.natal_chart.hour, d1.natal_chart.minute, int(d1.natal_chart.second)
+        )
+
+        # FIRST dasha must ALWAYS be first lord in custom order
+        first_lord = order[0]
+        first_years = years[first_lord]
+        elapsed = first_years * frac
+        start = birth - timedelta(days=elapsed * 365.25)
+
+        periods = []
+        cur = start
+        for lord in order:
+            span = timedelta(days=years[lord] * 365.25)
+            end = cur + span
+            periods.append((lord, cur, end))
+            cur = end
+
+        for lord, s, e in periods:
+            nid = tree.insert("", "end", text=f"{lord}: {s:%Y-%m-%d} → {e:%Y-%m-%d}")
+            node_data[nid] = {"type": "maha", "lord": lord, "start": s, "end": e}
+            tree.insert(nid, "end", text="(double click for antardasha)")
+
+    # ------------------ ANTARDASHA --------------------------
+    def build_antardasha(maha_lord, start, end):
+        order, years = get_settings()                # <-- always refresh
+        full_days = (end - start).total_seconds() / 86400
+
+        # use standard vimshottari RATIO
+        seq = order[:]                               # custom sequence
+        std_total = sum(VIM_STD_YEARS.values())
+        cur = start
+        ants = []
+        for lord in seq:
+            part = VIM_STD_YEARS[lord] / std_total
+            span = full_days * part
+            new_end = cur + timedelta(days=span)
+            ants.append((lord, cur, new_end))
+            cur = new_end
+        return ants
+
+    # TREE EVENTS
+    def on_expand(event):
+        item = tree.focus()
+        data = node_data.get(item)
+        if not data or data["type"] != "maha":
+            return
+
+        for c in tree.get_children(item):
+            tree.delete(c)
+
+        ants = build_antardasha(data["lord"], data["start"], data["end"])
+        for lord, s, e in ants:
+            cid = tree.insert(item, "end", text=f"   {lord}: {s:%Y-%m-%d} → {e:%Y-%m-%d}")
+            node_data[cid] = {"type": "antar", "lord": lord, "start": s, "end": e}
+
+    def on_select(event):
+        item = tree.focus()
+        data = node_data.get(item)
+        details.delete("1.0", "end")
+        if not data:
+            return
+        details.insert("end", f"{data['type'].title()} Dasha\n")
+        details.insert("end", f"Lord: {data['lord']}\n")
+        details.insert("end", f"Start: {data['start']}\n")
+        details.insert("end", f"End:   {data['end']}\n")
+
+    tree.bind("<Double-1>", on_expand)
+    tree.bind("<<TreeviewSelect>>", on_select)
+
+    ttk.Button(win, text="BUILD MAHADASHA", command=build_mahadasha).pack(pady=6)
+    build_mahadasha()
+
+
 def start_chart_menu():
     global horoscope
     if horoscope is None:
@@ -546,7 +718,7 @@ def start_chart_menu():
 
     root = tk.Tk()
     root.title("Astrology Toolkit")
-    root.geometry("1100x840")
+    root.geometry("1400x840")
     root.configure(bg="white")
 
     menubar = tk.Menu(root)
@@ -568,7 +740,7 @@ def start_chart_menu():
             w.destroy()
 
         rows = 2
-        cols = 2
+        cols = 5
         chart_size = 260
         canv_w = canv_h = 260
 
@@ -576,7 +748,13 @@ def start_chart_menu():
             ("D1 Birth Chart", horoscope),
             ("D9 Navamsa", make_navamsa_horoscope(horoscope)),
             ("D3 Drekkana", make_drekkana_horoscope(horoscope)),
-            ("D81 Chart", make_d81_horoscope(horoscope))
+            ("D81 Chart", make_d81_horoscope(horoscope)),
+            ("d4 chart",make_d4_horoscope(horoscope)),
+            ("d10 chart",make_d10_horoscope(horoscope)),
+            ("nadi d30 chart",make_nadid30_horoscope(horoscope)),
+            ("d16 chart",make_d16_horoscope(horoscope)),
+            ("d12 chart",make_d12_horoscope(horoscope)),
+            ("d144 chart",make_d144_horoscope(horoscope))
         ]
 
         for idx, (label, hscope) in enumerate(charts):
@@ -662,6 +840,7 @@ def start_chart_menu():
     dm = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="Dasha", menu=dm)
     dm.add_command(label="Vimshottari Explorer", command=lambda: create_vimshottari_window(root))
+    dm.add_command(label="Vimshottari Rajan dasa Explorer", command=lambda: create_custom_dasha_window(root))
 
     # transit
     tm = tk.Menu(menubar, tearoff=0)
