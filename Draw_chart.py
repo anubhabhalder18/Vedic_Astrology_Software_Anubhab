@@ -1417,9 +1417,9 @@ def start_chart_menu():
             w.destroy()
 
         rows = 2
-        cols = 5
-        chart_size = 260
-        canv_w = canv_h = 260
+        cols = 6
+        chart_size = 200
+        canv_w = canv_h = 210
 
         charts = [
             ("D1 Birth Chart", horoscope),
@@ -1431,7 +1431,15 @@ def start_chart_menu():
             ("nadi d30 chart",make_nadid30_horoscope(horoscope)),
             ("d16 chart",make_d16_horoscope(horoscope)),
             ("d12 chart",make_d12_horoscope(horoscope)),
-            ("d144 chart",make_d144_horoscope(horoscope))
+            ("d144 chart",make_d144_horoscope(horoscope)),
+            ("d24 chart",make_d24_horoscope(horoscope)),
+            ("d27 chart",make_d27_horoscope(horoscope)),
+            ("d30 chart",make_d30_horoscope(horoscope)),
+            ("d20 chart",make_d20_horoscope(horoscope)),
+            ("d40 chart",make_d40_horoscope(horoscope)),
+            ("d45 chart",make_d45_horoscope(horoscope)),
+            ("d60 chart",make_d60_horoscope(horoscope)),
+            ("d5  chart",make_d5_horoscope(horoscope))
         ]
 
         for idx, (label, hscope) in enumerate(charts):
@@ -1534,6 +1542,8 @@ def start_chart_menu():
     # start with all charts
     show_all_charts()
     root.mainloop()
+
+
 
 
 # ------------------------------------------------
