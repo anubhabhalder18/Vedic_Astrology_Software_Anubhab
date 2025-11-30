@@ -157,35 +157,70 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
     def details(event=None):
         win = tk.Toplevel()
         win.title("Chart Details")
-        win.geometry("620x350")
+        win.geometry("680x380")
+
         cols = ("Body", "Rashi-Deg-Min", "Nakshatra-Pada", "Speed")
-        tree = ttk.Treeview(win, columns=cols, show="headings")
+
+        # Frame + scrollbar + treeview
+        frame = ttk.Frame(win)
+        frame.pack(fill="both", expand=True)
+
+        yscroll = ttk.Scrollbar(frame, orient="vertical")
+        tree = ttk.Treeview(frame, columns=cols, show="headings", yscrollcommand=yscroll.set)
+
+        yscroll.config(command=tree.yview)
+        yscroll.pack(side="right", fill="y")
+        tree.pack(side="left", fill="both", expand=True)
+
         for c in cols:
             tree.heading(c, text=c)
-            tree.column(c, width=140, anchor="center")
-        tree.pack(fill="both", expand=True)
+            tree.column(c, width=160, anchor="center")
 
+        # Ascendant
         asc_pos = h.ascendant.planet_position
-        tree.insert("", "end", values=(
-            "Asc",
-            f"{asc_pos.rashi} {asc_pos.degree}°{asc_pos.minute}',{asc_pos.second:.2f}",
-            f"{asc_pos.nakshatra} (Pada {asc_pos.pada})",
-            ""
-        ))
+        tree.insert(
+            "",
+            "end",
+            values=(
+                "Asc",
+                f"{asc_pos.rashi} {asc_pos.degree}°{asc_pos.minute}'{asc_pos.second:.2f}",
+                f"{asc_pos.nakshatra} (Pada {asc_pos.pada})",
+                ""
+            ),
+        )
 
+        # Planets
         order = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Rahu", "Ketu"]
         for p in order:
             pl = getattr(h, p)
             pos = pl.planet_position
-            tree.insert("", "end", values=(
-                p,
-                f"{pos.rashi} {pos.degree}°{pos.minute}'{pos.second:.2f}",
-                f"{pos.nakshatra} (Pada {pos.pada})",
-                f"{pl.speed:.3f}"
-            ))
+            tree.insert(
+                "",
+                "end",
+                values=(
+                    p,
+                    f"{pos.rashi} {pos.degree}°{pos.minute}'{pos.second:.2f}",
+                    f"{pos.nakshatra} (Pada {pos.pada})",
+                    f"{pl.speed:.3f}",
+                ),
+            )
+
+        # 🔥 Special Lagnas (only in details list, NOT drawn on chart)
+        if hasattr(h, "special_lagnas") and h.special_lagnas:
+            for sp in h.special_lagnas:
+                pos = sp.planet_position
+                tree.insert(
+                    "",
+                    "end",
+                    values=(
+                        sp.name,
+                        f"{pos.rashi} {pos.degree}°{pos.minute}'{pos.second:.2f}",
+                        f"{pos.nakshatra} (Pada {pos.pada})",
+                        "",  # speed is conceptual / not needed here
+                    ),
+                )
 
     canvas.bind("<Button-1>", details)
-
 
 # ------------------------------------------------
 # SAVE / LOAD .AST CHARTS

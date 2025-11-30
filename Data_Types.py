@@ -138,29 +138,39 @@ class Planet:
         print(f"Planet Name: {self.name}")
         self.planet_position.print_position()
         print(f"Speed: {self.speed:.6f}°/day")
-    
+
+from typing import List    
+from dataclasses import dataclass
+from typing import List
+from Data_Types import Planet, chart_details, position
+
 @dataclass
 class Horror_scope:
-    ascendant:position
-    natal_chart:chart_details
-    Sun:Planet
-    Moon:Planet
-    Mercury:Planet
-    Venus:Planet
-    Mars:Planet
-    Jupiter:Planet
-    Saturn:Planet
-    Rahu:Planet
-    Ketu:Planet
-    weekday:str
-    date:int
-    month:int
-    year:int
-    hour:int
-    minute:int
-    second:float
-    longitude:float
-    latitude:float
+    ascendant: position
+    natal_chart: chart_details
+    Sun: Planet
+    Moon: Planet
+    Mercury: Planet
+    Venus: Planet
+    Mars: Planet
+    Jupiter: Planet
+    Saturn: Planet
+    Rahu: Planet
+    Ketu: Planet
+    weekday: str
+    date: int
+    month: int
+    year: int
+    hour: int
+    minute: int
+    second: float
+    longitude: float
+    latitude: float
+
+    # 🔥 NEW FIELD added — required for special lagna support
+    special_lagnas: List[Planet] = None
+
+    
     
 
     def print_horoscope(self):
