@@ -168,7 +168,7 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
         asc_pos = h.ascendant.planet_position
         tree.insert("", "end", values=(
             "Asc",
-            f"{asc_pos.rashi} {asc_pos.degree}°{asc_pos.minute}'",
+            f"{asc_pos.rashi} {asc_pos.degree}°{asc_pos.minute}',{asc_pos.second:.2f}",
             f"{asc_pos.nakshatra} (Pada {asc_pos.pada})",
             ""
         ))
@@ -179,7 +179,7 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
             pos = pl.planet_position
             tree.insert("", "end", values=(
                 p,
-                f"{pos.rashi} {pos.degree}°{pos.minute}'",
+                f"{pos.rashi} {pos.degree}°{pos.minute}'{pos.second:.2f}",
                 f"{pos.nakshatra} (Pada {pos.pada})",
                 f"{pl.speed:.3f}"
             ))
@@ -861,6 +861,572 @@ def create_custom_dasha_window(parent):
     # Initial build
     build_mahadasha()
 
+import tkinter as tk
+from tkinter import ttk, messagebox
+from datetime import datetime, timedelta
+
+# assumes you already have:
+#   from Data_Types import Horror_scope
+#   a global variable `horoscope` that holds the current Horror_scope
+
+# ----------------------------------------------
+#  Kalachakra Dasha window
+# ----------------------------------------------
+import tkinter as tk
+from tkinter import ttk, messagebox
+from datetime import datetime, timedelta
+
+from Data_Types import Horror_scope   # you already have this
+# global horoscope must exist in your main program
+horoscope = None   # or keep the one you already have
+
+
+# ------------------- KALACHAKRA CONSTANTS -------------------
+
+RASI_ABBR = ["Ar","Ta","Ge","Cn","Le","Vi","Li","Sc","Sg","Cp","Aq","Pi"]
+RASI_INDEX = {name:i for i,name in enumerate(RASI_ABBR)}
+
+# Table-1: years for each sign
+KALA_RASI_YEARS = {
+    "Ar":7, "Ta":16, "Ge":9, "Cn":21,
+    "Le":5, "Vi":9, "Li":16, "Sc":7,
+    "Sg":10, "Cp":4, "Aq":4, "Pi":10
+}
+
+# Nak names you use in your horoscope (normalized with .lower().replace(" ",""))
+NAK_NAMES = [
+    "ashwini","bharani","krittika","rohini","mrigashira","ardra","punarvasu","pushya","ashlesha",
+    "magha","purvaphalguni","uttaraphalguni","hasta","chitra","swati","vishakha","anuradha","jyeshtha",
+    "mula","purvaashadha","uttaraashadha","shravana","dhanishta","shatabhisha","purvabhadrapada",
+    "uttarabhadrapada","revati"
+]
+
+# --- Savya / Apasavya groups (Table-3) ---
+
+def norm_nak(name: str) -> str:
+    return name.replace(" ", "").lower()
+
+SAVYA1 = {norm_nak(x) for x in [
+    "Ashwini","Krittika","Punarvasu","Ashlesha","Hasta","Swati",
+    "Mula","Uttara Ashadha","Purva Bhadrapada","Revati"
+]}
+SAVYA2 = {norm_nak(x) for x in [
+    "Bharani","Pushya","Chitra","Purva Ashadha","Uttara Bhadrapada"
+]}
+APAS1 = {norm_nak(x) for x in [
+    "Rohini","Magha","Vishakha","Shravana"
+]}
+APAS2 = {norm_nak(x) for x in [
+    "Mrigashira","Ardra","Purva Phalguni","Uttara Phalguni",
+    "Anuradha","Jyeshtha","Dhanishta","Shatabhisha"
+]}
+
+def get_group(nak_name: str) -> str:
+    n = norm_nak(nak_name)
+    if n in SAVYA1:  return "Savya1"
+    if n in SAVYA2:  return "Savya2"
+    if n in APAS1:   return "Apas1"
+    if n in APAS2:   return "Apas2"
+    return "Savya1"     # safe default
+
+
+# ----- pada → (dasa sequence, paramayush) from Tables (4 cycles × 4 padas) -----
+
+def seq(*abbr):
+    return [RASI_INDEX[a] for a in abbr]
+
+KALA_CYCLES = {
+    "Savya1": {
+        1: (seq("Ar","Ta","Ge","Cn","Le","Vi","Li","Sc","Sg"), 100),
+        2: (seq("Cp","Aq","Pi","Sc","Li","Vi","Cn","Le","Ge"), 85),
+        3: (seq("Ta","Ar","Pi","Aq","Cp","Sg","Ar","Ta","Ge"), 83),
+        4: (seq("Cn","Le","Vi","Li","Sc","Sg","Cp","Aq","Pi"), 86),
+    },
+    "Savya2": {
+        1: (seq("Sc","Li","Vi","Cn","Le","Ge","Ta","Ar","Pi"), 100),
+        2: (seq("Aq","Cp","Sg","Ar","Ta","Ge","Cn","Le","Vi"), 85),
+        3: (seq("Li","Sc","Sg","Cp","Aq","Pi","Sc","Li","Vi"), 83),
+        4: (seq("Cn","Le","Ge","Ta","Ar","Pi","Aq","Cp","Sg"), 86),
+    },
+    "Apas1": {
+        1: (seq("Sg","Cp","Aq","Pi","Ar","Ta","Ge","Le","Cn"), 86),
+        2: (seq("Vi","Li","Sc","Pi","Aq","Cp","Sg","Sc","Li"), 83),
+        3: (seq("Vi","Le","Cn","Ge","Ta","Ar","Sg","Cp","Aq"), 85),
+        4: (seq("Pi","Ar","Ta","Ge","Le","Cn","Vi","Li","Sc"), 100),
+    },
+    "Apas2": {
+        1: (seq("Pi","Aq","Cp","Sg","Sc","Li","Vi","Le","Cn"), 86),
+        2: (seq("Ge","Ta","Ar","Sg","Cp","Aq","Pi","Ar","Ta"), 83),
+        3: (seq("Ge","Le","Cn","Vi","Li","Sc","Pi","Aq","Cp"), 85),
+        4: (seq("Sg","Sc","Li","Vi","Le","Cn","Ge","Ta","Ar"), 100),
+    },
+}
+
+NAK_TOTAL_DEG = 360.0 / 27.0      # 13°20'
+PADA_DEG      = NAK_TOTAL_DEG / 4
+
+
+# ======================= MAIN UI FUNCTION =======================
+import tkinter as tk
+from tkinter import ttk, messagebox
+from datetime import datetime, timedelta
+
+from Data_Types import Horror_scope
+
+# expects these to exist in your module:
+# NAK_NAMES, NAK_TOTAL_DEG, PADA_DEG
+# get_group(nak_name) -> group_key
+# GROUP_DIRECTION[group_key] -> "Savya" / "Apasavya"
+# KALA_CYCLES[group_key][pada] -> (seq_list, paramayush)
+# KALA_RASI_YEARS[rasi_abbr] -> years
+# RASI_ABBR[sign_index] -> "Ar", "Ta", ...
+# RASHIS[sign_index] -> "Aries", ... (for display if needed)
+def create_kalachakra_window(parent):
+    global horoscope
+    if horoscope is None:
+        messagebox.showerror("No Chart", "No horoscope loaded.")
+        return
+    d1: Horror_scope = horoscope
+
+    # ------------------------------------
+    # CONSTANT TABLES
+    # ------------------------------------
+    KALA_NAKS = [
+        "Ashwini","Bharani","Krittika","Rohini","Mrigashira","Ardra","Punarvasu","Pushya","Ashlesha",
+        "Magha","Purva Phalguni","Uttara Phalguni","Hasta","Chitra","Swati","Vishakha","Anuradha","Jyeshtha",
+        "Mula","Purva Ashadha","Uttara Ashadha","Shravana","Dhanishta","Shatabhisha","Purva Bhadrapada",
+        "Uttara Bhadrapada","Revati"
+    ]
+
+    # rashi names used by Moon.planet_position.rashi
+    RASHIS = [
+        "Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+        "Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces"
+    ]
+
+    # Savya / Apasavya groups (with corrected spellings)
+    SAVYA1 = [
+        "Ashwini","Krittika","Punarvasu","Ashlesha",
+        "Hasta","Swati","Mula","Uttara Ashadha","Purva Bhadrapada","Revati"
+    ]
+    SAVYA2 = [
+        "Bharani","Pushya","Chitra","Purva Ashadha","Uttara Bhadrapada"
+    ]
+    APAS1 = [
+        "Rohini","Magha","Vishakha","Shravana"
+    ]
+    APAS2 = [
+        "Mrigashira","Ardra","Purva Phalguni","Uttara Phalguni",
+        "Anuradha","Jyeshtha","Dhanishta","Shatabhisha"
+    ]
+
+    # sign → abbreviation
+    RASI_ABBR = ["Ar","Ta","Ge","Cn","Le","Vi","Li","Sc","Sg","Cp","Aq","Pi"]
+
+    # sign → Kalachakra Dasha duration (years)
+    KALA_RASI_YEARS = {
+        "Ar":7,"Ta":16,"Ge":9,"Cn":21,"Le":5,"Vi":9,"Li":16,"Sc":7,"Sg":10,"Cp":4,"Aq":4,"Pi":10
+    }
+
+    # 4 padas × 4 groups = 16 cycles
+    # Each = (sequence of signs, Paramayush)
+    KALA_CYCLES = {
+        # --------- SAVYA – I -----------
+        ("Savya1", 1): (["Ar","Ta","Ge","Cn","Le","Vi","Li","Sc","Sg"], 100),
+        ("Savya1", 2): (["Cp","Aq","Pi","Sc","Li","Vi","Cn","Le","Ge"], 85),
+        ("Savya1", 3): (["Ta","Ar","Pi","Aq","Cp","Sg","Ar","Ta","Ge"], 83),
+        ("Savya1", 4): (["Cn","Le","Vi","Li","Sc","Sg","Cp","Aq","Pi"], 86),
+
+        # --------- SAVYA – II ----------
+        ("Savya2", 1): (["Sc","Li","Vi","Cn","Le","Ge","Ta","Ar","Pi"], 100),
+        ("Savya2", 2): (["Aq","Cp","Sg","Ar","Ta","Ge","Cn","Le","Vi"], 85),
+        ("Savya2", 3): (["Li","Sc","Sg","Cp","Aq","Pi","Sc","Li","Vi"], 83),
+        ("Savya2", 4): (["Cn","Le","Ge","Ta","Ar","Pi","Aq","Cp","Sg"], 86),
+
+        # --------- APASAVYA – I --------
+        ("Apas1", 1): (["Sg","Cp","Aq","Pi","Ar","Ta","Ge","Le","Cn"], 86),
+        ("Apas1", 2): (["Vi","Li","Sc","Pi","Aq","Cp","Sg","Sc","Li"], 83),
+        ("Apas1", 3): (["Vi","Le","Cn","Ge","Ta","Ar","Sg","Cp","Aq"], 85),
+        ("Apas1", 4): (["Pi","Ar","Ta","Ge","Le","Cn","Vi","Li","Sc"], 100),
+
+        # --------- APASAVYA – II -------
+        ("Apas2", 1): (["Pi","Aq","Cp","Sg","Sc","Li","Vi","Le","Cn"], 86),
+        ("Apas2", 2): (["Ge","Ta","Ar","Sg","Cp","Aq","Pi","Ar","Ta"], 83),
+        ("Apas2", 3): (["Ge","Le","Cn","Vi","Li","Sc","Pi","Aq","Cp"], 85),
+        ("Apas2", 4): (["Sg","Sc","Li","Vi","Le","Cn","Ge","Ta","Ar"], 100),
+    }
+
+    GROUP_DIRECTION = {
+        "Savya1": "Savya", "Savya2": "Savya",
+        "Apas1": "Apasavya", "Apas2": "Apasavya"
+    }
+
+    # helpers
+    def norm_nak(name: str) -> str:
+        return name.strip()
+
+    def get_group(nak_name: str) -> str:
+        n = norm_nak(nak_name)
+        if n in SAVYA1: return "Savya1"
+        if n in SAVYA2: return "Savya2"
+        if n in APAS1:  return "Apas1"
+        if n in APAS2:  return "Apas2"
+        return "Savya1"
+
+    # mega-cycle ring for MAHADASAS (matches PDF logic)
+    def build_megacycle_ring(cycle_type: str):
+        if cycle_type == "Savya":
+            # Savya1 p1–4, then Savya2 p1–4
+            return [("Savya1", p) for p in range(1, 5)] + \
+                   [("Savya2", p) for p in range(1, 5)]
+        else:
+            # Apas2 p1–4, then Apas1 p1–4 (matches Ardra example)
+            return [("Apas2", p) for p in range(1, 5)] + \
+                   [("Apas1", p) for p in range(1, 5)]
+
+    # pada ring for ANTARDASAS (as you asked: Apas1 p1→p2→p3→p4→Apas2 p1→…)
+    def build_antar_ring(cycle_type: str):
+        if cycle_type == "Savya":
+            return [("Savya1", p) for p in range(1, 5)] + \
+                   [("Savya2", p) for p in range(1, 5)]
+        else:
+            return [("Apas1", p) for p in range(1, 5)] + \
+                   [("Apas2", p) for p in range(1, 5)]
+
+    # ------------------------------------
+    # UI
+    # ------------------------------------
+    win = tk.Toplevel(parent)
+    win.title("Kalachakra Dasa Explorer")
+    win.geometry("1150x720")
+
+    # ------- Moon entry --------
+    moon_frame = ttk.LabelFrame(win, text="Moon at Birth (override)")
+    moon_frame.pack(fill="x", padx=6, pady=4)
+
+    moon = d1.Moon.planet_position
+
+    ttk.Label(moon_frame, text="Moon Rashi (1–12):").grid(row=0, column=0, padx=4, pady=2, sticky="e")
+    e_rashi = ttk.Entry(moon_frame, width=5)
+    try:
+        rashi_idx = RASHIS.index(moon.rashi) + 1
+    except Exception:
+        rashi_idx = int(moon.longitude // 30) + 1
+    e_rashi.insert(0, str(rashi_idx))
+    e_rashi.grid(row=0, column=1, padx=4, pady=2)
+
+    ttk.Label(moon_frame, text="Deg:").grid(row=0, column=2, padx=4, pady=2, sticky="e")
+    e_deg = ttk.Entry(moon_frame, width=5)
+    e_deg.insert(0, str(int(moon.degree)))
+    e_deg.grid(row=0, column=3, padx=4, pady=2)
+
+    ttk.Label(moon_frame, text="Min:").grid(row=0, column=4, padx=4, pady=2, sticky="e")
+    e_min = ttk.Entry(moon_frame, width=5)
+    e_min.insert(0, str(int(moon.minute)))
+    e_min.grid(row=0, column=5, padx=4, pady=2)
+
+    ttk.Label(moon_frame, text="Sec:").grid(row=0, column=6, padx=4, pady=2, sticky="e")
+    e_sec = ttk.Entry(moon_frame, width=6)
+    e_sec.insert(0, str(float(getattr(moon, "second", 0.0))))
+    e_sec.grid(row=0, column=7, padx=4, pady=2, sticky="e")
+
+    # ------- main layout --------
+    main = ttk.Frame(win)
+    main.pack(fill="both", expand=True)
+
+    left = ttk.Frame(main)
+    left.pack(side="left", fill="both")
+
+    right = ttk.Frame(main)
+    right.pack(side="right", fill="both", expand=True)
+
+    scroll = ttk.Scrollbar(left, orient="vertical")
+    tree = ttk.Treeview(left, yscrollcommand=scroll.set)
+    tree.heading("#0", text="Kalachakra Mahadasha / Antardasha")
+    tree.pack(side="left", fill="both", expand=True)
+    scroll.config(command=tree.yview)
+    scroll.pack(side="right", fill="y")
+
+    detail = tk.Text(right, wrap="word")
+    detail.pack(fill="both", expand=True)
+
+    node_data = {}
+
+    NAK_TOTAL = 360.0 / 27.0
+    PADA_LEN = NAK_TOTAL / 4.0
+
+    # ------------------------------------
+    # MOON → NAK, PADA, CYCLE
+    # ------------------------------------
+    def calc_moon_params():
+        """Return dict with moon longitude, nakshatra, pada, cycle seq, etc."""
+        try:
+            r = int(e_rashi.get()) - 1
+            dg = float(e_deg.get())
+            mn = float(e_min.get())
+            sc = float(e_sec.get())
+            lon = (r * 30.0 + dg + mn/60.0 + sc/3600.0) % 360.0
+        except Exception:
+            lon = moon.longitude % 360.0
+
+        nak_index = int(lon // NAK_TOTAL)
+        nak_name = KALA_NAKS[nak_index]
+
+        inside_nak = lon - nak_index * NAK_TOTAL
+        pada = int(inside_nak // PADA_LEN) + 1
+        if pada < 1: pada = 1
+        if pada > 4: pada = 4
+
+        deg_in_pada = inside_nak - (pada - 1) * PADA_LEN
+        frac_in_pada = deg_in_pada / PADA_LEN
+        if frac_in_pada < 0: frac_in_pada = 0.0
+        if frac_in_pada > 1: frac_in_pada = 1.0
+
+        group_key = get_group(nak_name)
+        cycle_seq, paramayush = KALA_CYCLES[(group_key, pada)]
+        direction = GROUP_DIRECTION[group_key]
+
+        return {
+            "lon": lon,
+            "nak_index": nak_index,
+            "nak_name": nak_name,
+            "pada": pada,
+            "deg_in_pada": deg_in_pada,
+            "frac_in_pada": frac_in_pada,
+            "group_key": group_key,
+            "direction": direction,
+            "cycle_seq": cycle_seq,
+            "paramayush": float(paramayush)
+        }
+
+    # ------------------------------------
+    # FIND RUNNING DASA AT BIRTH
+    # (match PDF example – use paramayush * fraction_left)
+    # ------------------------------------
+    def find_running_dasa(cycle_seq, paramayush, frac_in_pada):
+        # fraction left in pada (like example: 0.1 → left)
+        frac_left = 1.0 - frac_in_pada
+        rem_years = paramayush * frac_left
+
+        # walk from END of cycle backwards
+        rev_seq = list(reversed(cycle_seq))
+        running_sign = rev_seq[-1]
+        left_in_running = 0.0
+        rem = rem_years
+        for s in rev_seq:
+            yrs = KALA_RASI_YEARS[s]
+            if rem > yrs:
+                rem -= yrs
+            else:
+                running_sign = s
+                left_in_running = rem    # years LEFT in running dasa at birth
+                break
+        return running_sign, left_in_running, rem_years
+
+    # ------------------------------------
+    # MAHADASAS (3 mega-cycles max)
+    # ------------------------------------
+    def build_mahadashas():
+        tree.delete(*tree.get_children())
+        node_data.clear()
+        detail.delete("1.0", "end")
+
+        moon_info = calc_moon_params()
+        cycle_seq = moon_info["cycle_seq"]
+        paramayush = moon_info["paramayush"]
+        frac_in_pada = moon_info["frac_in_pada"]
+        group_key = moon_info["group_key"]
+        direction = moon_info["direction"]
+        pada = moon_info["pada"]
+        nak_name = moon_info["nak_name"]
+
+        running_sign, left_in_running, rem_years = find_running_dasa(
+            cycle_seq, paramayush, frac_in_pada
+        )
+
+        # birth datetime
+        nc = d1.natal_chart
+        birth = datetime(
+            nc.year, nc.month, nc.date,
+            nc.hour, nc.minute, int(nc.second)
+        )
+
+        # first cycle after birth = remainder of current cycle (rem_years)
+        cur = birth
+        md_index = 1
+        mahadashas = []
+
+        # partial running dasa at birth
+        if left_in_running > 0:
+            span_days = left_in_running * 365.25
+            end = cur + timedelta(days=span_days)
+            mahadashas.append({
+                "sign": running_sign,
+                "start": cur,
+                "end": end,
+                "md_index": md_index
+            })
+            cur = end
+            md_index += 1
+
+        # remaining dasas in birth cycle after running sign
+        used_in_cycle = left_in_running
+        total_cycle_after_birth = rem_years
+        start_idx = cycle_seq.index(running_sign)
+        rem_seq = cycle_seq[start_idx+1:]
+
+        for s in rem_seq:
+            yrs = KALA_RASI_YEARS[s]
+            if used_in_cycle + yrs > total_cycle_after_birth + 1e-6:
+                yrs = max(0.0, total_cycle_after_birth - used_in_cycle)
+            if yrs <= 0:
+                break
+            span_days = yrs * 365.25
+            end = cur + timedelta(days=span_days)
+            mahadashas.append({
+                "sign": s,
+                "start": cur,
+                "end": end,
+                "md_index": md_index
+            })
+            cur = end
+            md_index += 1
+            used_in_cycle += yrs
+            if used_in_cycle >= total_cycle_after_birth - 1e-6:
+                break
+
+        # further cycles in mega-cycle (up to 3 mega-cycles total)
+        cycle_type = "Savya" if group_key.startswith("Savya") else "Apasavya"
+        ring = build_megacycle_ring(cycle_type)
+        birth_cycle = (group_key, pada)
+        base_ring_index = ring.index(birth_cycle)
+
+        MEGACYCLES = 3
+        MAX_CYCLES = MEGACYCLES * 8
+        cycle_counter = 1  # already used birth cycle (partial)
+
+        ring_idx = (base_ring_index + 1) % len(ring)
+        while cycle_counter < MAX_CYCLES:
+            gk, pd = ring[ring_idx]
+            seq_next, param_next = KALA_CYCLES[(gk, pd)]
+            for s in seq_next:
+                yrs = KALA_RASI_YEARS[s]
+                span_days = yrs * 365.25
+                end = cur + timedelta(days=span_days)
+                mahadashas.append({
+                    "sign": s,
+                    "start": cur,
+                    "end": end,
+                    "md_index": md_index
+                })
+                cur = end
+                md_index += 1
+            cycle_counter += 1
+            ring_idx = (ring_idx + 1) % len(ring)
+
+        # summary text
+        detail.insert("end",
+            f"Moon Nakshatra: {nak_name} (Pada {pada}), Group: {group_key} ({direction})\n"
+            f"Paramayush (birth cycle): {paramayush} years\n"
+            f"Fraction of pada traversed at birth: {frac_in_pada:.4f}\n"
+            f"Remainder in cycle at birth: {rem_years:.4f} years\n\n"
+        )
+
+        # fill tree
+        for md in mahadashas:
+            s = md["sign"]
+            st = md["start"]
+            en = md["end"]
+            md_i = md["md_index"]
+            text = f"{md_i:02d}. {s}  {st:%Y-%m-%d} → {en:%Y-%m-%d}"
+            nid = tree.insert("", "end", text=text)
+            node_data[nid] = {
+                "type": "maha",
+                "sign": s,
+                "start": st,
+                "end": en,
+                "md_index": md_i,
+                "group_key": group_key,
+                "pada_birth": pada,
+                "cycle_type": cycle_type
+            }
+            tree.insert(nid, "end", text="(double click for Antardashas)")
+
+    # ------------------------------------
+    # ANTARDASAS
+    # ------------------------------------
+    def build_antardashas_for_maha(data):
+        md_sign = data["sign"]
+        start = data["start"]
+        end = data["end"]
+        md_index = data["md_index"]
+
+        group_key = data["group_key"]
+        pada_birth = data["pada_birth"]
+        cycle_type = data["cycle_type"]
+
+        ring_ant = build_antar_ring(cycle_type)
+        base_index = ring_ant.index((group_key, pada_birth))
+
+        # shift by (md_index-1) padas as you requested
+        ants_cycle_index = (base_index + (md_index - 1)) % len(ring_ant)
+        group_next, pada_next = ring_ant[ants_cycle_index]
+
+        ants_cycle, _ = KALA_CYCLES[(group_next, pada_next)]
+
+        total_days = (end - start).total_seconds() / 86400.0
+        total_years = sum(KALA_RASI_YEARS[s] for s in ants_cycle)
+
+        ants = []
+        cur = start
+        for s in ants_cycle:
+            ratio = KALA_RASI_YEARS[s] / total_years
+            span = total_days * ratio
+            new_end = cur + timedelta(days=span)
+            ants.append((s, cur, new_end))
+            cur = new_end
+        return ants
+
+    # ------------------------------------
+    # TREE EVENTS
+    # ------------------------------------
+    def on_open(event):
+        item = tree.focus()
+        d = node_data.get(item)
+        if not d or d["type"] != "maha":
+            return
+        for c in tree.get_children(item):
+            tree.delete(c)
+        ants = build_antardashas_for_maha(d)
+        for s, st, en in ants:
+            txt = f"    {s}  {st:%Y-%m-%d} → {en:%Y-%m-%d}"
+            cid = tree.insert(item, "end", text=txt)
+            node_data[cid] = {
+                "type": "antar",
+                "sign": s,
+                "start": st,
+                "end": en
+            }
+
+    def on_select(event):
+        item = tree.focus()
+        d = node_data.get(item)
+        detail.delete("1.0", "end")
+        if not d:
+            return
+        kind = "Mahadasha" if d["type"] == "maha" else "Antardasha"
+        detail.insert("end",
+            f"{kind} of {d['sign']}\n"
+            f"Start: {d['start']}\n"
+            f"End  : {d['end']}\n"
+        )
+
+    tree.bind("<Double-1>", on_open)
+    tree.bind("<<TreeviewSelect>>", on_select)
+
+    ttk.Button(win, text="Rebuild Kalachakra Dasa", command=build_mahadashas).pack(pady=4)
+
+    build_mahadashas()
 
 def start_chart_menu():
     global horoscope
@@ -999,6 +1565,7 @@ def start_chart_menu():
     menubar.add_cascade(label="Dasha", menu=dm)
     dm.add_command(label="Vimshottari Explorer", command=lambda: create_vimshottari_window(root))
     dm.add_command(label="Vimshottari Rajan dasa Explorer", command=lambda: create_custom_dasha_window(root))
+    dm.add_command(label="Kalachakra dasa Explorer", command=lambda: create_kalachakra_window(root))
 
     # transit
     tm = tk.Menu(menubar, tearoff=0)
