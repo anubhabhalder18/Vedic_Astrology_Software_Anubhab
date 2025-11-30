@@ -42,37 +42,76 @@ LAGNA_SPEEDS = {
 # -------------------------------------------------------
 # WORKING LOCAL SUNRISE (ASTRAL, RESPECTING chart.timezone)
 # -------------------------------------------------------
+from astral.sun import sun
+from astral import Observer
+from datetime import date, timezone, timedelta
+
+from Data_Types import chart_details
+
+
+def _local_tz_from_chart(chart: chart_details) -> timezone:
+    """
+    chart.timezone is used in your code as:
+        UT = local_time + chart.timezone
+
+    For India:
+        local = UT + 5.5  =>  chart.timezone = -5.5
+
+    So: local_offset_hours = -chart.timezone
+    """
+    offset_hours = -chart.timezone
+    return timezone(timedelta(hours=offset_hours))
+
+
 def get_sunrise_decimal(chart: chart_details) -> float:
     """
-    Returns LOCAL sunrise time as decimal hours, using:
-    - Astral sun() → times in UTC
-    - chart.timezone: you are using it as UT = local + timezone
-      => local = UT - timezone
+    Return LOCAL sunrise time as decimal hours, e.g. 6.5 = 06:30 local.
+    Uses Astral in local time (no manual UT conversion).
     """
-    # Astral sun() with observer only returns UTC times (naive datetime)
-    observer = LocationInfo(latitude=chart.latitude,
-                            longitude=chart.longitude).observer
 
-    s = sun(observer, date=date(chart.year, chart.month, chart.date))
-    sr_utc = s['sunrise']  # naive datetime, interpreted as UTC
+    # Observer (Astral v3)
+    observer = Observer(
+        latitude=chart.latitude,
+        longitude=chart.longitude,
+        elevation=getattr(chart, "altidude", 0.0)  # your typo field
+    )
 
-    utc_dec = sr_utc.hour + sr_utc.minute / 60 + sr_utc.second / 3600
-    # You use: UT = local + timezone  ⇒ local = UT - timezone
-    local_dec = utc_dec - chart.timezone
-    return local_dec
+    tz = _local_tz_from_chart(chart)
+
+    s = sun(
+        observer,
+        date=date(chart.year, chart.month, chart.date),
+        tzinfo=tz,          # <-- directly get local times
+    )
+
+    sr_local = s["sunrise"]  # timezone-aware local datetime
+
+    return sr_local.hour + sr_local.minute / 60 + sr_local.second / 3600.0
 
 
-# Optional: if you also want sunset later
 def get_sunset_decimal(chart: chart_details) -> float:
-    observer = LocationInfo(latitude=chart.latitude,
-                            longitude=chart.longitude).observer
+    """
+    Return LOCAL sunset time as decimal hours, e.g. 18.25 = 18:15 local.
+    Uses Astral in local time.
+    """
 
-    s = sun(observer, date=date(chart.year, chart.month, chart.date))
-    ss_utc = s['sunset']
+    observer = Observer(
+        latitude=chart.latitude,
+        longitude=chart.longitude,
+        elevation=getattr(chart, "altidude", 0.0)
+    )
 
-    utc_dec = ss_utc.hour + ss_utc.minute / 60 + ss_utc.second / 3600
-    local_dec = utc_dec - chart.timezone
-    return local_dec
+    tz = _local_tz_from_chart(chart)
+
+    s = sun(
+        observer,
+        date=date(chart.year, chart.month, chart.date),
+        tzinfo=tz,
+    )
+
+    ss_local = s["sunset"]
+
+    return ss_local.hour + ss_local.minute / 60 + ss_local.second / 3600.0
 
 
 # -------------------------------------------------------
