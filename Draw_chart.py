@@ -1422,6 +1422,143 @@ def create_kalachakra_window(parent):
 
     build_mahadashas()
 
+
+
+
+
+
+def open_panchanga_window(parent, hscope: Horror_scope):
+    import tkinter as tk
+    from tkinter import ttk
+
+    win = tk.Toplevel(parent)
+    win.title("Panchanga")
+    win.geometry("380x420")
+    win.configure(bg="white")
+
+    # --- extract Sun & Moon from Horoscope ---
+    sun_lon = hscope.Sun.planet_position.longitude
+    moon_lon = hscope.Moon.planet_position.longitude
+
+    def lon_to_rashi(lon):
+        rashi = int(lon // 30) + 1  # 1–12
+        deg = int(lon % 30)
+        mins = int((lon % 1) * 60)
+        return rashi, deg, mins
+
+    sun_rashi_init, sun_deg_init, sun_min_init = lon_to_rashi(sun_lon)
+    moon_rashi_init, moon_deg_init, moon_min_init = lon_to_rashi(moon_lon)
+
+    # --- tkinter variables ---
+    sun_rashi_var = tk.StringVar(value=str(sun_rashi_init))
+    sun_deg_var   = tk.StringVar(value=str(sun_deg_init))
+    sun_min_var   = tk.StringVar(value=str(sun_min_init))
+    moon_rashi_var = tk.StringVar(value=str(moon_rashi_init))
+    moon_deg_var   = tk.StringVar(value=str(moon_deg_init))
+    moon_min_var   = tk.StringVar(value=str(moon_min_init))
+    result_var = tk.StringVar()
+
+    # vardev / weekday lord
+    # Weekday / Vara lord detection (handles both string & integer formats)
+    
+    vardev = hscope.weekday
+
+
+    ttk.Label(win, text=f"Vara: {vardev}", foreground="purple", font=("Arial", 11, "bold")).grid(row=0, column=0, columnspan=2, pady=(5, 10))
+
+    # --- Rashi converter ---
+    def rashi_to_degrees(rashi_num, degree, minute):
+        return (rashi_num - 1) * 30 + degree + (minute / 60)
+
+    # --- Panchanga compute ---
+    def calculate_panchanga():
+        try:
+            sun_long = rashi_to_degrees(int(sun_rashi_var.get()), int(sun_deg_var.get()), int(sun_min_var.get()))
+            moon_long = rashi_to_degrees(int(moon_rashi_var.get()), int(moon_deg_var.get()), int(moon_min_var.get()))
+
+            tithi_diff = (moon_long - sun_long) % 360
+            tithi_index = int(tithi_diff // 12) + 1
+            yoga_sum = (sun_long + moon_long) % 360
+            yoga_index = int(yoga_sum // (13 + 1/3)) + 1
+            supta_sum = (sun_long + moon_long + 93 + 20/60) % 360
+            supta_index = int(supta_sum // (13 + 1/3)) + 1
+            karana_index = int(tithi_diff // 6)
+
+            tithi_names = [
+                "Pratipada", "Dwitiya", "Tritiya", "Chaturthi", "Panchami",
+                "Shashthi", "Saptami", "Ashtami", "Navami", "Dashami",
+                "Ekadashi", "Dwadashi", "Trayodashi", "Chaturdashi", "Purnima",
+                "Pratipada", "Dwitiya", "Tritiya", "Chaturthi", "Panchami",
+                "Shashthi", "Saptami", "Ashtami", "Navami", "Dashami",
+                "Ekadashi", "Dwadashi", "Trayodashi", "Chaturdashi", "Amavasya"
+            ]
+
+            yoga_names = [
+                "Vishkambha", "Priti", "Ayushman", "Saubhagya", "Shobhana",
+                "Atiganda", "Sukarma", "Dhriti", "Shoola", "Ganda",
+                "Vriddhi", "Dhruva", "Vyaghata", "Harshana", "Vajra",
+                "Siddhi", "Vyatipata", "Variyan", "Parigha", "Shiva",
+                "Siddha", "Sadhya", "Shubha", "Shukla", "Brahma",
+                "Indra", "Vaidhriti"
+            ]
+
+            nakshatra_names = [
+                "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira",
+                "Ardra", "Punarvasu", "Pushya", "Ashlesha", "Magha",
+                "Purva Phalguni", "Uttara Phalguni", "Hasta", "Chitra", "Swati",
+                "Vishakha", "Anuradha", "Jyeshtha", "Mula", "Purva Ashadha",
+                "Uttara Ashadha", "Shravana", "Dhanishta", "Shatabhisha", "Purva Bhadrapada",
+                "Uttara Bhadrapada", "Revati"
+            ]
+
+            karana_sequence = (
+                ["Kimstughna(Ke)"] +
+                ["Bava(Su)", "Balava(Mo)", "Kaulava(Ma)", "Taitila(Mercury)", "Garaja(Ju)", "Vanija(Ve)", "Vishti(Saturn)"] * 8 +
+                ["Shakuni(Ra)", "Chatushpada(Ke)", "Naga(Ra)"]
+            )
+
+            tithi = tithi_names[min(tithi_index - 1, len(tithi_names) - 1)]
+            yoga = yoga_names[min(yoga_index - 1, len(yoga_names) - 1)]
+            supta_nakshatra = nakshatra_names[min(supta_index - 1, len(nakshatra_names) - 1)]
+            karana = karana_sequence[min(karana_index, len(karana_sequence) - 1)]
+            avayogi_index = (supta_index + 5+9 - 1) % 27
+            avayogi_nakshatra = nakshatra_names[avayogi_index]
+
+            result_var.set(
+                f"Vara (Weekday Lord): {vardev}\n"
+                f"Tithi: {tithi}\n"
+                f"Yoga: {yoga}\n"
+                f"Yoga Supta Nakshatra: {supta_nakshatra}\n"
+                f"Avayogi Nakshatra: {avayogi_nakshatra}\n"
+                f"Karana: {karana}"
+            )
+
+        except Exception as e:
+            result_var.set(f"Error: {e}")
+
+    # --- GUI input fields ---
+    fields = [
+        ("Sun Rashi (1–12)", sun_rashi_var),
+        ("Sun Degree (0–29)", sun_deg_var),
+        ("Sun Minutes (0–59)", sun_min_var),
+        ("Moon Rashi (1–12)", moon_rashi_var),
+        ("Moon Degree (0–29)", moon_deg_var),
+        ("Moon Minutes (0–59)", moon_min_var),
+    ]
+
+    for i, (label, var) in enumerate(fields):
+        ttk.Label(win, text=label).grid(row=i+1, column=0, padx=5, pady=2, sticky="e")
+        ttk.Entry(win, textvariable=var, width=10).grid(row=i+1, column=1, padx=5, pady=2)
+
+    ttk.Button(win, text="Calculate Panchanga", command=calculate_panchanga)\
+        .grid(row=8, column=0, columnspan=2, pady=10)
+
+    ttk.Label(win, textvariable=result_var, justify="left", foreground="blue", background="white", font=("Arial", 11))\
+        .grid(row=9, column=0, columnspan=2, padx=5, pady=10)
+
+    # auto calculate at open
+    calculate_panchanga()
+
 def start_chart_menu():
     global horoscope
     if horoscope is None:
@@ -1439,7 +1576,34 @@ def start_chart_menu():
     chart_frame = tk.Frame(root, bg="white")
     chart_frame.pack(fill="both", expand=True)
 
-    # --- helpers for showing ---
+    # ============================================================
+    # CHART SELECTION FLAGS
+    # ============================================================
+    chart_flags = {
+        "D1 Birth Chart": tk.BooleanVar(value=True),
+        "D3 Drekkana": tk.BooleanVar(value=True),
+        "D4 Chart": tk.BooleanVar(value=True),
+        "D5 Chart": tk.BooleanVar(value=True),
+        "D7 Chart": tk.BooleanVar(value=True),
+        "D9 Navamsa": tk.BooleanVar(value=True),
+        "D10 Chart": tk.BooleanVar(value=True),
+        "D12 Chart": tk.BooleanVar(value=True),
+        "D16 Chart": tk.BooleanVar(value=True),
+        "D20 Chart": tk.BooleanVar(value=True),
+        "D24 Chart": tk.BooleanVar(value=True),
+        "D27 Chart": tk.BooleanVar(value=True),
+        "D30 Chart": tk.BooleanVar(value=True),
+        "Nadi D30 Chart": tk.BooleanVar(value=True),
+        "D40 Chart": tk.BooleanVar(value=True),
+        "D45 Chart": tk.BooleanVar(value=True),
+        "D60 Chart": tk.BooleanVar(value=True),
+        "D81 Chart": tk.BooleanVar(value=True),
+        "D144 Chart": tk.BooleanVar(value=False)
+    }
+
+    # ============================================================
+    # SHOW ONE BIG CHART
+    # ============================================================
     def show_one(hscope: Horror_scope):
         for w in chart_frame.winfo_children():
             w.destroy()
@@ -1447,39 +1611,50 @@ def start_chart_menu():
         cv.pack()
         draw_fixed_rashi_chart(hscope, size=700, canvas_override=cv)
 
+    # ============================================================
+    # SHOW SELECTED CHARTS TOGETHER
+    # ============================================================
     def show_all_charts():
         for w in chart_frame.winfo_children():
             w.destroy()
 
-        rows = 2
+        rows = 3
         cols = 6
         chart_size = 200
         canv_w = canv_h = 210
 
-        charts = [
+        # Mapping chart labels to their generator
+        chart_map = [
             ("D1 Birth Chart", horoscope),
-            ("D9 Navamsa", make_navamsa_horoscope(horoscope)),
             ("D3 Drekkana", make_drekkana_horoscope(horoscope)),
+            ("D4 Chart", make_d4_horoscope(horoscope)),
+            ("D5 Chart", make_d5_horoscope(horoscope)),
+            ("D7 Chart", make_saptamsa_horoscope(horoscope)),
+            ("D9 Navamsa", make_navamsa_horoscope(horoscope)),
+            ("D10 Chart", make_d10_horoscope(horoscope)),
+            ("D12 Chart", make_d12_horoscope(horoscope)),
+            ("D16 Chart", make_d16_horoscope(horoscope)),
+            ("D20 Chart", make_d20_horoscope(horoscope)),
+            ("D24 Chart", make_d24_horoscope(horoscope)),
+            ("D27 Chart", make_d27_horoscope(horoscope)),
+            ("D30 Chart", make_d30_horoscope(horoscope)),
+            ("Nadi D30 Chart", make_nadid30_horoscope(horoscope)),
+            ("D40 Chart", make_d40_horoscope(horoscope)),
+            ("D45 Chart", make_d45_horoscope(horoscope)),
+            ("D60 Chart", make_d60_horoscope(horoscope)),
             ("D81 Chart", make_d81_horoscope(horoscope)),
-            ("d4 chart",make_d4_horoscope(horoscope)),
-            ("d10 chart",make_d10_horoscope(horoscope)),
-            ("nadi d30 chart",make_nadid30_horoscope(horoscope)),
-            ("d16 chart",make_d16_horoscope(horoscope)),
-            ("d12 chart",make_d12_horoscope(horoscope)),
-            ("d144 chart",make_d144_horoscope(horoscope)),
-            ("d24 chart",make_d24_horoscope(horoscope)),
-            ("d27 chart",make_d27_horoscope(horoscope)),
-            ("d30 chart",make_d30_horoscope(horoscope)),
-            ("d20 chart",make_d20_horoscope(horoscope)),
-            ("d40 chart",make_d40_horoscope(horoscope)),
-            ("d45 chart",make_d45_horoscope(horoscope)),
-            ("d60 chart",make_d60_horoscope(horoscope)),
-            ("d5  chart",make_d5_horoscope(horoscope))
+            ("D144 Chart", make_d144_horoscope(horoscope))
         ]
 
-        for idx, (label, hscope) in enumerate(charts):
+        idx = 0
+        for label, hscope in chart_map:
+            if not chart_flags[label].get():
+                continue
+
             r = idx // cols
             c = idx % cols
+            idx += 1
+
             frame = tk.Frame(chart_frame, bg="white")
             frame.grid(row=r, column=c, padx=10, pady=10)
 
@@ -1489,7 +1664,9 @@ def start_chart_menu():
             cv.pack()
             draw_fixed_rashi_chart(hscope, size=chart_size, canvas_override=cv)
 
-    # --- edit chart popup ---
+    # ============================================================
+    # EDIT BIRTH DETAILS
+    # ============================================================
     def edit_chart():
         global horoscope
         top = tk.Toplevel(root)
@@ -1531,33 +1708,34 @@ def start_chart_menu():
 
         tk.Button(top, text="Apply", command=apply).grid(row=len(arr), columnspan=2, pady=5)
 
-    # --- open saved wrapper (updates global + refresh all charts) ---
-    def open_saved_wrapper():
-        global horoscope
-        h = load_ast()
-        if h is not None:
-            show_all_charts()
+    # ============================================================
+    # MENUS
+    # ============================================================
 
-    # menu – Chart
+    # Chart selector menu (NEW)
+    sm = tk.Menu(menubar, tearoff=0)
+    menubar.add_cascade(label="Select Charts", menu=sm)
+
+    for lbl in chart_flags:
+        sm.add_checkbutton(label=lbl, variable=chart_flags[lbl], command=show_all_charts)
+
+    # Chart display menu
     cm = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="Charts", menu=cm)
-    cm.add_command(label="Show All Charts", command=show_all_charts)
+    cm.add_command(label="Show Selected Charts", command=show_all_charts)
     cm.add_command(label="D1 (only)", command=lambda: show_one(horoscope))
     cm.add_command(label="D9 (only)", command=lambda: show_one(make_navamsa_horoscope(horoscope)))
     cm.add_command(label="D3 (only)", command=lambda: show_one(make_drekkana_horoscope(horoscope)))
-    cm.add_command(label="D81 (only)", command=lambda: show_one(make_d81_horoscope(horoscope)))
-    cm.add_command(label="D16 (only)", command=lambda: show_one(make_d16_horoscope(horoscope)))
-    cm.add_command(label="D4 (only)", command=lambda: show_one(make_d4_horoscope(horoscope)))
-    cm.add_command(label="Nadi D30 (only)", command=lambda: show_one(make_nadid30_horoscope(horoscope)))
-    cm.add_command(label="D10 (only)", command=lambda: show_one(make_d16_horoscope(horoscope)))
-    cm.add_command(label="D12 (only)", command=lambda: show_one(make_d12_horoscope(horoscope)))
-    cm.add_command(label="D144 (only)", command=lambda: show_one(make_d144_horoscope(horoscope)))
-    
-    # file section
+    cm.add_command(label="D10 (only)", command=lambda: show_one(make_d10_horoscope(horoscope)))
+    cm.add_command(label="D60 (only)", command=lambda: show_one(make_d60_horoscope(horoscope)))
+    cm.add_command(label="Panchanga", command=lambda: open_panchanga_window(root, horoscope))
+
+
+    # file
     fm = tk.Menu(menubar, tearoff=0)
     menubar.add_cascade(label="File", menu=fm)
     fm.add_command(label="Save as .ast", command=lambda: save_ast(horoscope))
-    fm.add_command(label="Open saved", command=open_saved_wrapper)
+    fm.add_command(label="Open saved", command=lambda: (load_ast(), show_all_charts()))
     fm.add_command(label="Edit chart", command=edit_chart)
     fm.add_separator()
     fm.add_command(label="Exit", command=root.quit)
@@ -1577,7 +1755,6 @@ def start_chart_menu():
     # start with all charts
     show_all_charts()
     root.mainloop()
-
 
 
 

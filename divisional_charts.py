@@ -1366,3 +1366,74 @@ def make_d5_horoscope(d1: Horror_scope) -> Horror_scope:
         latitude=d1.latitude,
         special_lagnas=d5_special_lagnas      # 🔥 added here
     )
+
+
+def make_saptamsa_horoscope(d1: Horror_scope) -> Horror_scope:
+    """Return D7 (Saptamsa) chart as per commonly used Parashari rule."""
+
+    D7_PART = 30 / 7  # ~4.285714° per Saptamsa segment
+
+    odd_signs = [0, 2, 4, 6, 8, 10]      # Aries, Gemini, Leo, Libra, Sagittarius, Aquarius
+    even_signs = [1, 3, 5, 7, 9, 11]     # Taurus, Cancer, Virgo, Scorpio, Capricorn, Pisces
+
+    def d7_long(longitude):
+        lon = longitude % 360
+        rashi = int(lon // 30)                # base sign index 0–11
+        inside = lon % 30                     # degrees inside sign (0–30)
+        part = int(inside // D7_PART)         # Saptamsa index 0–6
+
+        # Determine starting sign for D7
+        if rashi in odd_signs:
+            first_sign = rashi                        # same sign
+        else:
+            first_sign = (rashi + 6) % 12             # 7th from sign = +6
+
+        # D7 sign = first sign + part (cyclic zodiac progression)
+        new_sign = (first_sign + part) % 12
+
+        # Proportional degree inside the Saptamsa segment
+        inside_part = inside - part * D7_PART
+        percent = inside_part / D7_PART
+        d7_deg = percent * 30                         # 0–30 mapped inside D7 sign
+
+        return new_sign * 30 + d7_deg
+
+    def convert(planet: Planet):
+        nl = d7_long(planet.planet_position.longitude)
+        return Planet.make(planet.name, nl, planet.speed * 7)
+
+    asc_long = d7_long(
+        d1.ascendant.longitude if not hasattr(d1.ascendant, "planet_position")
+        else d1.ascendant.planet_position.longitude
+    )
+    asc = Planet.make("Ascendant", asc_long, 0)
+    d7_special_lagnas = []
+    if hasattr(d1, "special_lagnas") and d1.special_lagnas:
+        for sp in d1.special_lagnas:
+            slon = d7_long(sp.planet_position.longitude)
+            d7_special_lagnas.append(Planet.make(sp.name, slon, 0))
+
+
+    return Horror_scope(
+        ascendant=asc,
+        natal_chart=d1.natal_chart,
+        Sun=convert(d1.Sun),
+        Moon=convert(d1.Moon),
+        Mercury=convert(d1.Mercury),
+        Venus=convert(d1.Venus),
+        Mars=convert(d1.Mars),
+        Jupiter=convert(d1.Jupiter),
+        Saturn=convert(d1.Saturn),
+        Rahu=convert(d1.Rahu),
+        Ketu=convert(d1.Ketu),
+        weekday=d1.weekday,
+        date=d1.date,
+        month=d1.month,
+        year=d1.year,
+        hour=d1.hour,
+        minute=d1.minute,
+        second=d1.second,
+        longitude=d1.longitude,
+        latitude=d1.latitude,
+        special_lagnas=d7_special_lagnas
+    )

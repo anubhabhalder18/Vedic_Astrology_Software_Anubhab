@@ -42,74 +42,52 @@ LAGNA_SPEEDS = {
 # -------------------------------------------------------
 # WORKING LOCAL SUNRISE (ASTRAL, RESPECTING chart.timezone)
 # -------------------------------------------------------
-from astral.sun import sun
 from astral import Observer
-from datetime import date, timezone, timedelta
-
+from astral.sun import dawn, dusk
+from datetime import date, timedelta, timezone
 from Data_Types import chart_details
 
+HALF_DISC_DEPRESSION = -0.4338   # center of sun visible
 
 def _local_tz_from_chart(chart: chart_details) -> timezone:
-    """
-    chart.timezone is used in your code as:
-        UT = local_time + chart.timezone
-
-    For India:
-        local = UT + 5.5  =>  chart.timezone = -5.5
-
-    So: local_offset_hours = -chart.timezone
-    """
-    offset_hours = -chart.timezone
+    offset_hours = -chart.timezone        # your convention
     return timezone(timedelta(hours=offset_hours))
 
 
 def get_sunrise_decimal(chart: chart_details) -> float:
-    """
-    Return LOCAL sunrise time as decimal hours, e.g. 6.5 = 06:30 local.
-    Uses Astral in local time (no manual UT conversion).
-    """
-
-    # Observer (Astral v3)
+    """LOCAL sunrise when Sun's CENTRE first becomes visible."""
     observer = Observer(
         latitude=chart.latitude,
         longitude=chart.longitude,
-        elevation=getattr(chart, "altidude", 0.0)  # your typo field
+        elevation=getattr(chart, "altidude", 0.0),
     )
-
     tz = _local_tz_from_chart(chart)
 
-    s = sun(
+    sr_local = dawn(
         observer,
         date=date(chart.year, chart.month, chart.date),
-        tzinfo=tz,          # <-- directly get local times
+        tzinfo=tz,
+        depression=HALF_DISC_DEPRESSION     # <-- mid-disc SUNRISE
     )
-
-    sr_local = s["sunrise"]  # timezone-aware local datetime
 
     return sr_local.hour + sr_local.minute / 60 + sr_local.second / 3600.0
 
 
 def get_sunset_decimal(chart: chart_details) -> float:
-    """
-    Return LOCAL sunset time as decimal hours, e.g. 18.25 = 18:15 local.
-    Uses Astral in local time.
-    """
-
+    """LOCAL sunset when Sun's CENTRE last disappears."""
     observer = Observer(
         latitude=chart.latitude,
         longitude=chart.longitude,
-        elevation=getattr(chart, "altidude", 0.0)
+        elevation=getattr(chart, "altidude", 0.0),
     )
-
     tz = _local_tz_from_chart(chart)
 
-    s = sun(
+    ss_local = dusk(
         observer,
         date=date(chart.year, chart.month, chart.date),
         tzinfo=tz,
+        depression=HALF_DISC_DEPRESSION     # <-- mid-disc SUNSET
     )
-
-    ss_local = s["sunset"]
 
     return ss_local.hour + ss_local.minute / 60 + ss_local.second / 3600.0
 
@@ -195,8 +173,8 @@ def sunrise_decimal_to_jd_ut(chart: chart_details, sunrise_local_dec: float) -> 
 def make_horoscope(chart: chart_details):
     jd_ut = swe.julday(chart.year, chart.month, chart.date,
                        chart.hour + chart.minute / 60 + chart.second / 3600 + chart.timezone)
-    weekday = ['Sunday', 'Monday', 'Tuesday', 'Wednesday',
-               'Thursday', 'Friday', 'Saturday'][swe.day_of_week(jd_ut)]
+    weekday = [ 'Monday', 'Tuesday', 'Wednesday',
+               'Thursday', 'Friday', 'Saturday','Sunday'][swe.day_of_week(jd_ut)]
 
     asc = get_asc(chart)
     sun = get_planet(chart, "Sun")
@@ -212,12 +190,11 @@ def make_horoscope(chart: chart_details):
     # ---- Sun at sunrise (if you really want sunrise Sun) ----
     sunrise_dec = get_sunrise_decimal(chart)            # local
     jd_sunrise_ut = sunrise_decimal_to_jd_ut(chart, sunrise_dec)
-    rising_sun_long = swe.calc_ut(
-        jd_sunrise_ut,
-        swe.SUN,
-        swe.FLG_SWIEPH | swe.FLG_TRUEPOS | swe.FLG_SIDEREAL
-    )[0][0]
-   
+    swe.set_topo(chart.longitude, chart.latitude, chart.altidude)
+    body_id = swe.SUN
+
+    rising_sun_long = swe.calc_ut(jd_sunrise_ut, body_id,
+                      swe.FLG_SWIEPH | swe.FLG_TRUEPOS | swe.FLG_SIDEREAL)[0][0]
     # Use sunrise Sun longitude for special lagnas:
     sun_long = rising_sun_long
     special_lagnas = calculate_special_lagnas(chart, sun_long)
