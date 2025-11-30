@@ -981,6 +981,11 @@ from Data_Types import Horror_scope
 # KALA_RASI_YEARS[rasi_abbr] -> years
 # RASI_ABBR[sign_index] -> "Ar", "Ta", ...
 # RASHIS[sign_index] -> "Aries", ... (for display if needed)
+import tkinter as tk
+from tkinter import ttk, messagebox
+from datetime import datetime, timedelta
+from Data_Types import Horror_scope
+
 def create_kalachakra_window(parent):
     global horoscope
     if horoscope is None:
@@ -1084,7 +1089,7 @@ def create_kalachakra_window(parent):
             return [("Apas2", p) for p in range(1, 5)] + \
                    [("Apas1", p) for p in range(1, 5)]
 
-    # pada ring for ANTARDASAS (as you asked: Apas1 p1→p2→p3→p4→Apas2 p1→…)
+    # pada ring for ANTARDASAS (Apas1 p1→p2→p3→p4→Apas2 p1→…)
     def build_antar_ring(cycle_type: str):
         if cycle_type == "Savya":
             return [("Savya1", p) for p in range(1, 5)] + \
@@ -1165,7 +1170,7 @@ def create_kalachakra_window(parent):
             dg = float(e_deg.get())
             mn = float(e_min.get())
             sc = float(e_sec.get())
-            lon = (r * 30.0 + dg + mn/60.0 + sc/3600.0) % 360.0
+            lon = (r * 30.0 + dg + mn / 60.0 + sc / 3600.0) % 360.0
         except Exception:
             lon = moon.longitude % 360.0
 
@@ -1174,13 +1179,17 @@ def create_kalachakra_window(parent):
 
         inside_nak = lon - nak_index * NAK_TOTAL
         pada = int(inside_nak // PADA_LEN) + 1
-        if pada < 1: pada = 1
-        if pada > 4: pada = 4
+        if pada < 1:
+            pada = 1
+        if pada > 4:
+            pada = 4
 
         deg_in_pada = inside_nak - (pada - 1) * PADA_LEN
         frac_in_pada = deg_in_pada / PADA_LEN
-        if frac_in_pada < 0: frac_in_pada = 0.0
-        if frac_in_pada > 1: frac_in_pada = 1.0
+        if frac_in_pada < 0:
+            frac_in_pada = 0.0
+        if frac_in_pada > 1:
+            frac_in_pada = 1.0
 
         group_key = get_group(nak_name)
         cycle_seq, paramayush = KALA_CYCLES[(group_key, pada)]
@@ -1192,7 +1201,7 @@ def create_kalachakra_window(parent):
             "nak_name": nak_name,
             "pada": pada,
             "deg_in_pada": deg_in_pada,
-            "frac_in_pada": frac_in_pada,
+            "frac_in_pada": frac_in_pada,   # portion TRAVERSED in pada
             "group_key": group_key,
             "direction": direction,
             "cycle_seq": cycle_seq,
@@ -1200,31 +1209,8 @@ def create_kalachakra_window(parent):
         }
 
     # ------------------------------------
-    # FIND RUNNING DASA AT BIRTH
-    # (match PDF example – use paramayush * fraction_left)
-    # ------------------------------------
-    def find_running_dasa(cycle_seq, paramayush, frac_in_pada):
-        # fraction left in pada (like example: 0.1 → left)
-        frac_left = 1.0 - frac_in_pada
-        rem_years = paramayush * frac_left
-
-        # walk from END of cycle backwards
-        rev_seq = list(reversed(cycle_seq))
-        running_sign = rev_seq[-1]
-        left_in_running = 0.0
-        rem = rem_years
-        for s in rev_seq:
-            yrs = KALA_RASI_YEARS[s]
-            if rem > yrs:
-                rem -= yrs
-            else:
-                running_sign = s
-                left_in_running = rem    # years LEFT in running dasa at birth
-                break
-        return running_sign, left_in_running, rem_years
-
-    # ------------------------------------
     # MAHADASAS (3 mega-cycles max)
+    # Now: start FIRST cycle earlier by paramayush * frac_in_pada
     # ------------------------------------
     def build_mahadashas():
         tree.delete(*tree.get_children())
@@ -1240,10 +1226,6 @@ def create_kalachakra_window(parent):
         pada = moon_info["pada"]
         nak_name = moon_info["nak_name"]
 
-        running_sign, left_in_running, rem_years = find_running_dasa(
-            cycle_seq, paramayush, frac_in_pada
-        )
-
         # birth datetime
         nc = d1.natal_chart
         birth = datetime(
@@ -1251,38 +1233,19 @@ def create_kalachakra_window(parent):
             nc.hour, nc.minute, int(nc.second)
         )
 
-        # first cycle after birth = remainder of current cycle (rem_years)
-        cur = birth
+        # EARLY START using portion of pada TRAVERSED
+        # years_early = paramayush * (portion of pada traversed)
+        years_early = paramayush * frac_in_pada
+        start = birth - timedelta(days=years_early * 365.25)
+
+        # FULL FIRST MAHADASHA CYCLE from cycle_seq[0] (no splitting)
+        cur = start
         md_index = 1
         mahadashas = []
 
-        # partial running dasa at birth
-        if left_in_running > 0:
-            span_days = left_in_running * 365.25
-            end = cur + timedelta(days=span_days)
-            mahadashas.append({
-                "sign": running_sign,
-                "start": cur,
-                "end": end,
-                "md_index": md_index
-            })
-            cur = end
-            md_index += 1
-
-        # remaining dasas in birth cycle after running sign
-        used_in_cycle = left_in_running
-        total_cycle_after_birth = rem_years
-        start_idx = cycle_seq.index(running_sign)
-        rem_seq = cycle_seq[start_idx+1:]
-
-        for s in rem_seq:
+        for s in cycle_seq:
             yrs = KALA_RASI_YEARS[s]
-            if used_in_cycle + yrs > total_cycle_after_birth + 1e-6:
-                yrs = max(0.0, total_cycle_after_birth - used_in_cycle)
-            if yrs <= 0:
-                break
-            span_days = yrs * 365.25
-            end = cur + timedelta(days=span_days)
+            end = cur + timedelta(days=yrs * 365.25)
             mahadashas.append({
                 "sign": s,
                 "start": cur,
@@ -1291,9 +1254,6 @@ def create_kalachakra_window(parent):
             })
             cur = end
             md_index += 1
-            used_in_cycle += yrs
-            if used_in_cycle >= total_cycle_after_birth - 1e-6:
-                break
 
         # further cycles in mega-cycle (up to 3 mega-cycles total)
         cycle_type = "Savya" if group_key.startswith("Savya") else "Apasavya"
@@ -1302,8 +1262,8 @@ def create_kalachakra_window(parent):
         base_ring_index = ring.index(birth_cycle)
 
         MEGACYCLES = 3
-        MAX_CYCLES = MEGACYCLES * 8
-        cycle_counter = 1  # already used birth cycle (partial)
+        MAX_CYCLES = MEGACYCLES * 8   # 8 cycles in a mega-cycle
+        cycle_counter = 1  # first (birth) cycle already used fully
 
         ring_idx = (base_ring_index + 1) % len(ring)
         while cycle_counter < MAX_CYCLES:
@@ -1329,7 +1289,7 @@ def create_kalachakra_window(parent):
             f"Moon Nakshatra: {nak_name} (Pada {pada}), Group: {group_key} ({direction})\n"
             f"Paramayush (birth cycle): {paramayush} years\n"
             f"Fraction of pada traversed at birth: {frac_in_pada:.4f}\n"
-            f"Remainder in cycle at birth: {rem_years:.4f} years\n\n"
+            f"First dasha cycle starts {years_early:.4f} years BEFORE birth\n\n"
         )
 
         # fill tree
@@ -1356,7 +1316,6 @@ def create_kalachakra_window(parent):
     # ANTARDASAS
     # ------------------------------------
     def build_antardashas_for_maha(data):
-        md_sign = data["sign"]
         start = data["start"]
         end = data["end"]
         md_index = data["md_index"]
@@ -1368,7 +1327,7 @@ def create_kalachakra_window(parent):
         ring_ant = build_antar_ring(cycle_type)
         base_index = ring_ant.index((group_key, pada_birth))
 
-        # shift by (md_index-1) padas as you requested
+        # shift by (md_index-1) padas (for 2nd, 3rd, 4th maha etc.)
         ants_cycle_index = (base_index + (md_index - 1)) % len(ring_ant)
         group_next, pada_next = ring_ant[ants_cycle_index]
 
