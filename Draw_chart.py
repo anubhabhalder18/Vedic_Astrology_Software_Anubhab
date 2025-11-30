@@ -69,10 +69,11 @@ DASHA_YEARS = {
 }
 
 NAK_LEN = 360.0 / 27.0
+#draw north chart
 
 
 # ------------------------------------------------
-# DRAW FIXED NORTH INDIAN CHART
+# DRAW FIXED East INDIAN CHART
 # ------------------------------------------------
 def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
     # canvas override system
@@ -895,6 +896,352 @@ def create_custom_dasha_window(parent):
 
     # Initial build
     build_mahadasha()
+
+
+
+DISWAPATI_NAK_LORDS = {
+    'Ashwini': 'Moon', 'Bharani': 'Mars', 'Krittika': 'Mercury',
+    'Rohini': 'Jupiter', 'Mrigshira': 'Venus', 'Ardra': 'Saturn',
+    'Punarvasu': 'Rahu', 'Pushya': 'Sun', 'Ashlesha': 'Moon',
+    'Magha': 'Mars', 'Purva Phalguni': 'Mercury', 'Uttar Phalguni': 'Jupiter',
+    'Hasta': 'Venus', 'Chitra': 'Saturn', 'Swati': 'Rahu',
+    'Visakha': 'Sun', 'Anuradha': 'Moon', 'Jyeshta': 'Mars',
+    'Mula': 'Sun', 'Purva Asadha': 'Moon', 'Uttar Asadha': 'Mars',
+    'Shravana': 'Mercury', 'Dhanista': 'Jupiter', 'Satobisha': 'Venus',
+    'Puva Bhadrapada': 'Saturn', 'Uttar Bhadrapada': 'Rahu', 'Revati': 'Sun'
+}
+NAKSHATRA_LIST = list(DISWAPATI_NAK_LORDS.keys())
+WEEKDAY_SEQUENCE = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu"]
+
+import tkinter as tk
+from tkinter import ttk, simpledialog, messagebox
+from datetime import datetime, timedelta
+
+# --- Diswapati constants ---
+DISWAPATI_NAK_LORDS = {
+    'Ashwini': 'Moon', 'Bharani': 'Mars', 'Krittika': 'Mercury',
+    'Rohini': 'Jupiter', 'Mrigshira': 'Venus', 'Ardra': 'Saturn',
+    'Punarvasu': 'Rahu', 'Pushya': 'Sun', 'Ashlesha': 'Moon',
+    'Magha': 'Mars', 'Purva Phalguni': 'Mercury', 'Uttar Phalguni': 'Jupiter',
+    'Hasta': 'Venus', 'Chitra': 'Saturn', 'Swati': 'Rahu',
+    'Visakha': 'Sun', 'Anuradha': 'Moon', 'Jyeshta': 'Mars',
+    'Mula': 'Sun', 'Purva Asadha': 'Moon', 'Uttar Asadha': 'Mars',
+    'Shravana': 'Mercury', 'Dhanista': 'Jupiter', 'Satobisha': 'Venus',
+    'Puva Bhadrapada': 'Saturn', 'Uttar Bhadrapada': 'Rahu', 'Revati': 'Sun'
+}
+
+NAKSHATRA_LIST = list(DISWAPATI_NAK_LORDS.keys())
+
+# Weekday order used for this dasha
+WEEKDAY_SEQUENCE = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu"]
+
+
+def create_diswapati_window(parent):
+    global horoscope
+    if horoscope is None:
+        messagebox.showerror("No Chart", "No horoscope loaded.")
+        return
+
+    d1 = horoscope   # Horror_scope object
+
+    win = tk.Toplevel(parent)
+    win.title("Diswapati (Weekday) Dasha — Single Window Explorer")
+    win.geometry("1100x700")
+
+    # ─────────────────────────────
+    # FRAMES
+    # ─────────────────────────────
+    left_frame = ttk.Frame(win)
+    left_frame.pack(side="left", fill="y")
+
+    right_frame = ttk.Frame(win)
+    right_frame.pack(side="right", fill="both", expand=True)
+
+    # ─────────────────────────────
+    # INPUT PANEL (with defaults from Horror_scope)
+    # ─────────────────────────────
+    input_frame = ttk.LabelFrame(right_frame, text="Input")
+    input_frame.pack(fill="x", padx=8, pady=6)
+
+    labels = [
+        "Moon Sign (1-12)", "Moon Degree (0-30)", "Moon Minute",
+        "Birth Day", "Birth Month", "Birth Year"
+    ]
+
+    # Defaults from horoscope (same idea as Vimshottari)
+    moon_pos = d1.Moon.planet_position
+    nc = d1.natal_chart
+
+    rashi_to_num = {
+        "Aries": 1, "Taurus": 2, "Gemini": 3, "Cancer": 4, "Leo": 5, "Virgo": 6,
+        "Libra": 7, "Scorpio": 8, "Sagittarius": 9, "Capricorn": 10, "Aquarius": 11, "Pisces": 12
+    }
+
+    defaults = [
+        rashi_to_num[moon_pos.rashi],
+        moon_pos.degree,
+        moon_pos.minute,
+        nc.date,
+        nc.month,
+        nc.year
+    ]
+
+    entries = []
+    for i, (lab, default) in enumerate(zip(labels, defaults)):
+        ttk.Label(input_frame, text=lab).grid(
+            row=i // 3, column=(i % 3) * 2, padx=5, pady=4, sticky="e"
+        )
+        e = ttk.Entry(input_frame, width=8)
+        e.insert(0, str(default))
+        e.grid(row=i // 3, column=(i % 3) * 2 + 1, padx=5, pady=4, sticky="w")
+        entries.append(e)
+
+    entry_sign, entry_deg, entry_min, entry_day, entry_month, entry_year = entries
+
+    # ─────────────────────────────
+    # LEFT: TREE
+    # ─────────────────────────────
+    tree_frame = ttk.Frame(left_frame)
+    tree_frame.pack(fill="both", expand=True, padx=6, pady=6)
+
+    tree_scroll = ttk.Scrollbar(tree_frame, orient="vertical")
+    tree = ttk.Treeview(tree_frame, yscrollcommand=tree_scroll.set)
+    tree.heading("#0", text="Diswapati Dasha Tree", anchor="w")
+    tree.pack(side="left", fill="y", expand=True)
+    tree_scroll.config(command=tree.yview)
+    tree_scroll.pack(side="right", fill="y")
+
+    # ─────────────────────────────
+    # RIGHT: DETAILS PANEL
+    # ─────────────────────────────
+    detail_frame = ttk.LabelFrame(right_frame, text="Selected Details")
+    detail_frame.pack(fill="both", expand=True, padx=8, pady=6)
+
+    detail_text = tk.Text(detail_frame, wrap="word")
+    detail_scroll = ttk.Scrollbar(detail_frame, orient="vertical", command=detail_text.yview)
+    detail_text.configure(yscrollcommand=detail_scroll.set)
+    detail_text.pack(side="left", fill="both", expand=True)
+    detail_scroll.pack(side="right", fill="y")
+
+    # ─────────────────────────────
+    # BUILD BUTTON
+    # ─────────────────────────────
+    btn_build = ttk.Button(right_frame, text="Build Diswapati Dasha Tree")
+    btn_build.pack(pady=4)
+
+    # Store extra metadata per tree node (maha/antar/praty)
+    node_data = {}
+
+    # ─────────────────────────────
+    # CORE FUNCTIONS
+    # ─────────────────────────────
+    def get_nakshatra(sign, deg, mins):
+        """
+        sign: 1–12 (Aries=1 ...)
+        deg: 0–30
+        mins: 0–60
+        """
+        total_deg = (sign - 1) * 30 + deg + mins / 60.0
+        nak_index = int(total_deg // 13.3333)
+        nak_deg_progress = total_deg % 13.3333
+        nak_name = NAKSHATRA_LIST[nak_index]
+        lord = DISWAPATI_NAK_LORDS[nak_name]
+        return nak_name, lord, nak_deg_progress
+
+    def weekday_sequence(start_lord):
+        if start_lord not in WEEKDAY_SEQUENCE:
+            raise ValueError(f"Lord {start_lord} not in weekday sequence.")
+        idx = WEEKDAY_SEQUENCE.index(start_lord)
+        return WEEKDAY_SEQUENCE[idx:] + WEEKDAY_SEQUENCE[:idx]
+
+    def calc_periods(start_date, seq, total_years):
+        """Divide total_years into equal parts for each lord in sequence."""
+        periods = []
+        current = start_date
+        span_years = total_years / len(seq)
+        span_days = span_years * 365.25
+        for lord in seq:
+            end = current + timedelta(days=span_days)
+            periods.append((lord, current, end))
+            current = end
+        return periods
+
+    def calc_antardasha(maha_lord, start, end):
+        """Antardasha: cycle of 9 years equally divided among weekday sequence."""
+        seq = weekday_sequence(maha_lord)
+        return calc_periods(start, seq, 9)
+
+    def calc_pratyantardasha(antar_lord, start, end):
+        """Pratyantardasha: cycle of 9/8 years equally among sequence."""
+        seq = weekday_sequence(antar_lord)
+        return calc_periods(start, seq, 9/8)
+
+    def calc_progression(start, end, deg0=0.0, parts=12):
+        """Progression: same style as your Vimshottari progression."""
+        total_days = (end - start).total_seconds() / (24 * 3600)
+        # First segment adjusted by starting degree
+        first = total_days * ((30.0 - deg0) / 30.0) / parts
+        left = total_days - first
+        step = left / (parts - 1) if parts > 1 else left
+        res = []
+        cur = start
+        for i in range(parts):
+            span = first if i == 0 else step
+            e = cur + timedelta(days=span)
+            res.append((f"Part {i + 1}", cur, e))
+            cur = e
+        return res
+
+    # ─────────────────────────────
+    # BUILD MAHADASHA TREE
+    # ─────────────────────────────
+    def build_mahadasha_tree():
+        try:
+            sign = int(entry_sign.get())
+            deg = float(entry_deg.get())
+            mins = float(entry_min.get())
+            d = int(entry_day.get())
+            m = int(entry_month.get())
+            y = int(entry_year.get())
+        except Exception:
+            messagebox.showerror("Error", "Invalid Moon / birth input.")
+            return
+
+        birth_date = datetime(y, m, d)
+
+        # Nakshatra, its lord and progress inside nakshatra
+        nak, first_lord, nak_deg_progress = get_nakshatra(sign, deg, mins)
+
+        # Dasha balance: 9-year cycle
+        fraction_passed = nak_deg_progress / 13.3333
+        total_cycle_years = 9
+        years_passed = total_cycle_years * fraction_passed
+        days_passed = years_passed * 365.25
+
+        dasha_start = birth_date - timedelta(days=days_passed)
+
+        # Weekday order starting from nakshatra lord
+        seq = weekday_sequence(first_lord)
+
+        # Full Mahadasha span = 72 years (8 lords × 9 years each)
+        mahadashas = calc_periods(dasha_start, seq, 72)
+
+        # Clear tree and details
+        for item in tree.get_children():
+            tree.delete(item)
+        node_data.clear()
+        detail_text.delete("1.0", "end")
+        detail_text.insert("end",
+                           f"Moon → {nak} (Lord {first_lord}) | Offset {nak_deg_progress:.2f}°\n"
+                           f"Dasha starts from: {dasha_start:%Y-%m-%d}\n\n")
+
+        # Add Mahadashas to tree
+        for lord2, s, e in mahadashas:
+            nid = tree.insert("", "end", text=f"{lord2}: {s:%Y-%m-%d} → {e:%Y-%m-%d}")
+            node_data[nid] = {"type": "maha", "lord": lord2, "start": s, "end": e}
+            tree.insert(nid, "end", text="(click to load antardashas)")
+
+    # ─────────────────────────────
+    # TREE OPEN HANDLER (expansion)
+    # ─────────────────────────────
+    def on_tree_open(event):
+        item = tree.focus()
+        data = node_data.get(item)
+        if not data:
+            return
+        children = tree.get_children(item)
+        if len(children) == 1 and "(click to load" in tree.item(children[0], "text"):
+            tree.delete(children[0])
+            if data["type"] == "maha":
+                # Load antardashas
+                for lord, s, e in calc_antardasha(data["lord"], data["start"], data["end"]):
+                    cid = tree.insert(item, "end", text=f"{lord}: {s:%Y-%m-%d} → {e:%Y-%m-%d}")
+                    node_data[cid] = {"type": "antar", "lord": lord, "start": s, "end": e}
+                    tree.insert(cid, "end", text="(click to load pratyantardashas)")
+            elif data["type"] == "antar":
+                # Load pratyantardashas
+                for lord, s, e in calc_pratyantardasha(data["lord"], data["start"], data["end"]):
+                    cid = tree.insert(item, "end", text=f"{lord}: {s:%Y-%m-%d} → {e:%Y-%m-%d}")
+                    node_data[cid] = {"type": "praty", "lord": lord, "start": s, "end": e}
+
+    # ─────────────────────────────
+    # TREE SELECT HANDLER
+    # ─────────────────────────────
+    def on_tree_select(event):
+        item = tree.focus()
+        data = node_data.get(item)
+        detail_text.delete("1.0", "end")
+        if not data:
+            return
+
+        detail_text.insert(
+            "end",
+            f"{data['type'].title()} Dasha\n"
+            f"Lord:  {data['lord']}\n"
+            f"Start: {data['start']}\n"
+            f"End:   {data['end']}\n\n"
+            "Use the progression panel below to subdivide this period.\n"
+        )
+
+    # ─────────────────────────────
+    # PROGRESSION PANEL
+    # ─────────────────────────────
+    prog_frame = ttk.LabelFrame(right_frame, text="Progression Calculator")
+    prog_frame.pack(fill="x", padx=8, pady=8)
+
+    ttk.Label(prog_frame, text="Starting Degrees (0-30):").grid(row=0, column=0, padx=4, sticky="e")
+    entry_prog_deg = ttk.Entry(prog_frame, width=8)
+    entry_prog_deg.insert(0, "0")
+    entry_prog_deg.grid(row=0, column=1, padx=4)
+
+    ttk.Label(prog_frame, text="Parts:").grid(row=0, column=2, padx=4, sticky="e")
+    entry_prog_parts = ttk.Entry(prog_frame, width=8)
+    entry_prog_parts.insert(0, "12")
+    entry_prog_parts.grid(row=0, column=3, padx=4)
+
+    def run_progression():
+        item = tree.focus()
+        data = node_data.get(item)
+        if not data:
+            messagebox.showinfo("Error", "Select a Mahadasha / Antardasha / Pratyantardasha first.")
+            return
+        try:
+            deg0 = float(entry_prog_deg.get())
+            parts = int(entry_prog_parts.get())
+        except Exception:
+            messagebox.showerror("Error", "Invalid progression input.")
+            return
+
+        res = calc_progression(data["start"], data["end"], deg0, parts)
+        detail_text.delete("1.0", "end")
+        detail_text.insert("end", f"Progression of {data['lord']} ({data['type']})\n\n")
+        for name, s, e in res:
+            detail_text.insert("end", f"{name}: {s} → {e}\n")
+
+    btn_progress = ttk.Button(prog_frame, text="Compute Progression", command=run_progression)
+    btn_progress.grid(row=0, column=4, padx=12)
+
+    # ─────────────────────────────
+    # BINDINGS
+    # ─────────────────────────────
+    btn_build.config(command=build_mahadasha_tree)
+    tree.bind("<<TreeviewOpen>>", on_tree_open)
+    tree.bind("<<TreeviewSelect>>", on_tree_select)
+
+    # Enter navigation same style as Vimshottari
+    for idx, ent in enumerate(entries):
+        def bind_next(i):
+            def _next(e):
+                if i + 1 < len(entries):
+                    entries[i + 1].focus_set()
+                else:
+                    build_mahadasha_tree()
+            return _next
+        ent.bind("<Return>", bind_next(idx))
+
+    # Auto-build on open with defaults
+    build_mahadasha_tree()
+
 
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -1742,10 +2089,11 @@ def start_chart_menu():
 
     # dasha
     dm = tk.Menu(menubar, tearoff=0)
-    menubar.add_cascade(label="Dasha", menu=dm)
+    menubar.add_cascade(label="Uddu Dasha", menu=dm)
     dm.add_command(label="Vimshottari Explorer", command=lambda: create_vimshottari_window(root))
     dm.add_command(label="Vimshottari Rajan dasa Explorer", command=lambda: create_custom_dasha_window(root))
     dm.add_command(label="Kalachakra dasa Explorer", command=lambda: create_kalachakra_window(root))
+    dm.add_command(label="DiswapatiSama dasha", command=lambda:create_diswapati_window(root))
 
     # transit
     tm = tk.Menu(menubar, tearoff=0)
