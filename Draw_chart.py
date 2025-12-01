@@ -279,35 +279,390 @@ def load_ast() -> Horror_scope | None:
 # ------------------------------------------------
 # TRANSIT WINDOW
 # ------------------------------------------------
-def open_transit_tab(root, natal: Horror_scope):
+import tkinter as tk
+from tkinter import ttk, messagebox
+from datetime import datetime, timedelta
+
+# Rashi names for UI
+RASHI_NAMES = [
+    "Aries", "Taurus", "Gemini", "Cancer",
+    "Leo", "Virgo", "Libra", "Scorpio",
+    "Sagittarius", "Capricorn", "Aquarius", "Pisces"
+]
+
+PLANET_NAMES = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Ketu"]
+
+
+# ---------- HELPERS TO READ FROM Horror_scope / Planet ----------
+
+def get_planet_obj(hscope, planet_name: str):
+    """
+    Returns the Planet object stored on Horror_scope (Sun, Moon, etc.)
+    """
+    if not hasattr(hscope, planet_name):
+        raise ValueError(f"Horror_scope has no attribute '{planet_name}'")
+    return getattr(hscope, planet_name)
+
+
+def get_planet_longitude(hscope, planet_name: str) -> float:
+    """
+    Read sidereal longitude from Horror_scope Planet structure.
+    Uses your Planet.make(name, lon, speed) pattern where
+    you later access sp.planet_position.longitude.
+    """
+    p = get_planet_obj(hscope, planet_name)
+    pos = getattr(p, "planet_position", p)
+    lon = getattr(pos, "longitude", None)
+    if lon is None:
+        raise ValueError(f"Planet '{planet_name}' has no longitude; check Data_Types.Planet implementation.")
+    return float(lon) % 360.0
+
+
+def get_planet_speed(hscope, planet_name: str) -> float:
+    """
+    Read planetary speed (deg/day) from Horror_scope.
+    In your code, speed for planets is computed as:
+        speed = (next_lon - lon) * 86400
+    and passed into Planet.make(name, lon, speed).
+    """
+    p = get_planet_obj(hscope, planet_name)
+    pos = getattr(p, "planet_position", p)
+    spd = getattr(pos, "speed", 0.0)
+    return float(spd)
+
+
+def normalize_angle_signed(angle: float) -> float:
+    """
+    Normalize angle difference to (-180, 180].
+    """
+    a = angle % 360.0
+    if a > 180.0:
+        a -= 360.0
+    return a
+
+
+# ---------- MAIN WINDOW FUNCTION ----------
+def open_transit_tab(root, horoscope: "Horror_scope"):
     top = tk.Toplevel(root)
-    top.title("Transit Chart")
-    top.geometry("350x260")
-    tk.Label(top, text="Enter Transit Date (DD-MM-YYYY):", font=("Arial", 12, "bold")).pack(pady=5)
+    top.title("Natal + Transit Divisional Charts")
+    top.geometry("1650x900")
 
-    ed = ttk.Entry(top)
-    ed.insert(0, "18-03-2025")
-    ed.pack()
+    # ------------------ MENU BAR ------------------ #
+    menubar = tk.Menu(top)
+    transit_menu = tk.Menu(menubar, tearoff=0)
 
-    def open_chart():
+    def open_crossing_dialog():
+        dlg = tk.Toplevel(top)
+        dlg.title("Find Planet Crossing Point")
+        dlg.geometry("340x320")
+        dlg.grab_set()
+
+        tk.Label(dlg, text="Planet:", font=("Arial", 10, "bold")).pack(pady=4)
+        planet_var = tk.StringVar(value=PLANET_NAMES[0])
+        ttk.Combobox(dlg, textvariable=planet_var, values=PLANET_NAMES,
+                     state="readonly").pack()
+
+        tk.Label(dlg, text="Rashi:", font=("Arial", 10, "bold")).pack(pady=4)
+        sign_var = tk.StringVar(value=RASHI_NAMES[0])
+        ttk.Combobox(dlg, textvariable=sign_var, values=RASHI_NAMES,
+                     state="readonly").pack()
+
+        tk.Label(dlg, text="Degree in Rashi (0–30):", font=("Arial", 10, "bold")).pack(pady=4)
+        deg_entry = ttk.Entry(dlg)
+        deg_entry.insert(0, "15.00")
+        deg_entry.pack()
+
+        tk.Label(dlg, text="Step (days):", font=("Arial", 10, "bold")).pack(pady=4)
+        step_entry = ttk.Entry(dlg)
+        step_entry.insert(0, "1")
+        step_entry.pack()
+
+        tk.Label(dlg, text="Max days to search (each side):", font=("Arial", 10, "bold")).pack(pady=4)
+        max_entry = ttk.Entry(dlg)
+        max_entry.insert(0, "365")
+        max_entry.pack()
+
+        def do_search():
+            try:
+                deg = float(deg_entry.get())
+                if not (0.0 <= deg <= 30.0):
+                    raise ValueError
+            except Exception:
+                messagebox.showerror("Err", "Degree must be 0–30.")
+                return
+
+            try:
+                step_days = int(step_entry.get())
+                max_days = int(max_entry.get())
+                if step_days <= 0 or max_days <= 0:
+                    raise ValueError
+            except Exception:
+                messagebox.showerror("Err", "Step & Max days must be integers.")
+                return
+
+            planet = planet_var.get()
+            sign_name = sign_var.get()
+            sign_index = RASHI_NAMES.index(sign_name)
+            target_lon = sign_index * 30.0 + deg
+
+            try:
+                d, m, y = map(int, dt_entry.get().split("-"))
+                cur_date = datetime(y, m, d)
+            except:
+                messagebox.showerror("Err", "Main window date invalid.")
+                return
+
+            cd = horoscope.natal_chart
+            base_chart = chart_details(cd.name + " Transit", cur_date.day, cur_date.month, cur_date.year,
+                                       cd.hour, cd.minute, cd.second,
+                                       cd.longitude, cd.latitude, cd.timezone, cd.altidude)
+            base_trans = make_horoscope(base_chart)
+            current_lon = get_planet_longitude(base_trans, planet)
+            current_speed = get_planet_speed(base_trans, planet)
+            current_diff = normalize_angle_signed(current_lon - target_lon)
+
+            forward_found = backward_found = None
+            prev_diff_f = prev_diff_b = current_diff
+
+            for i in range(1, max_days + 1):
+                f_date = cur_date + timedelta(days=step_days * i)
+                f_cd = chart_details(cd.name + " Transit", f_date.day, f_date.month, f_date.year,
+                                     cd.hour, cd.minute, cd.second,
+                                     cd.longitude, cd.latitude, cd.timezone, cd.altidude)
+                f_tr = make_horoscope(f_cd)
+                lon_f = get_planet_longitude(f_tr, planet)
+                diff_f = normalize_angle_signed(lon_f - target_lon)
+                if diff_f == 0 or diff_f * prev_diff_f < 0:
+                    forward_found = f_date
+                    break
+                prev_diff_f = diff_f
+
+            for i in range(1, max_days + 1):
+                b_date = cur_date - timedelta(days=step_days * i)
+                b_cd = chart_details(cd.name + " Transit", b_date.day, b_date.month, b_date.year,
+                                     cd.hour, cd.minute, cd.second,
+                                     cd.longitude, cd.latitude, cd.timezone, cd.altidude)
+                b_tr = make_horoscope(b_cd)
+                lon_b = get_planet_longitude(b_tr, planet)
+                diff_b = normalize_angle_signed(lon_b - target_lon)
+                if diff_b == 0 or diff_b * prev_diff_b < 0:
+                    backward_found = b_date
+                    break
+                prev_diff_b = diff_b
+
+            msg = []
+            msg.append(f"Planet: {planet}")
+            msg.append(f"Target: {sign_name} {deg:.2f}°")
+            msg.append(f"Current: {cur_date.strftime('%d-%m-%Y')}")
+            msg.append(f"Longitude: {current_lon:.2f}°")
+            msg.append(f"Speed: {current_speed:.4f} °/day")
+            msg.append("")
+            msg.append("Last crossing: " + (backward_found.strftime('%d-%m-%Y') if backward_found else "Not found"))
+            msg.append("Next crossing: " + (forward_found.strftime('%d-%m-%Y') if forward_found else "Not found"))
+
+            if forward_found:
+                chosen = forward_found
+            elif backward_found:
+                chosen = backward_found
+            else:
+                chosen = None
+
+            if chosen:
+                msg.append("")
+                msg.append(f"Transit updated to: {chosen.strftime('%d-%m-%Y')}")
+                dt_entry.delete(0, tk.END)
+                dt_entry.insert(0, chosen.strftime("%d-%m-%Y"))
+                refresh_all()
+
+            messagebox.showinfo("Planet Crossing Result", "\n".join(msg))
+            dlg.destroy()
+
+        ttk.Button(dlg, text="Find Crossing", command=do_search).pack(pady=10)
+
+    transit_menu.add_command(label="Find Planet Crossing Point...", command=open_crossing_dialog)
+    menubar.add_cascade(label="Transit Tools", menu=transit_menu)
+    top.config(menu=menubar)
+
+    # ------------------ DIVISIONAL CHARTS ------------------ #
+    ALL_DIVS = [
+        ("D1 Birth Chart", lambda h: h),
+        ("D3 Drekkana", make_drekkana_horoscope),
+        ("D4 Chart", make_d4_horoscope),
+        ("D5 Chart", make_d5_horoscope),
+        ("D7 Chart", make_saptamsa_horoscope),
+        ("D9 Navamsa", make_navamsa_horoscope),
+        ("D10 Chart", make_d10_horoscope),
+        ("D12 Chart", make_d12_horoscope),
+        ("D16 Chart", make_d16_horoscope),
+        ("D20 Chart", make_d20_horoscope),
+        ("D24 Chart", make_d24_horoscope),
+        ("D27 Chart", make_d27_horoscope),
+        ("D30 Chart", make_d30_horoscope),
+        ("Nadi D30 Chart", make_nadid30_horoscope),
+        ("D40 Chart", make_d40_horoscope),
+        ("D45 Chart", make_d45_horoscope),
+        ("D60 Chart", make_d60_horoscope),
+        ("D81 Chart", make_d81_horoscope),
+        ("D144 Chart", make_d144_horoscope),
+    ]
+
+    # ------------------ TOP CONTROL BAR ------------------ #
+    control = tk.Frame(top)
+    control.pack(side="top", fill="x", pady=6)
+
+    tk.Label(control, text="Transit Date (DD-MM-YYYY):", font=("Arial", 11, "bold")).pack(side="left")
+
+    dt_entry = ttk.Entry(control, width=12)
+    dt_entry.insert(0, datetime.now().strftime("%d-%m-%Y"))
+    dt_entry.pack(side="left", padx=4)
+
+    def shift_date(days=0, months=0, years=0):
+        from calendar import monthrange
         try:
-            d, m, y = map(int, ed.get().split("-"))
-        except Exception:
-            messagebox.showerror("Err", "Date must be DD-MM-YYYY")
+            d, m, y = map(int, dt_entry.get().split("-"))
+        except:
+            messagebox.showerror("Err", "Invalid date")
             return
-        cd = natal.natal_chart
-        trans_cd = chart_details(cd.name + " Transit", d, m, y,
-                                 cd.hour, cd.minute, cd.second,
-                                 cd.longitude, cd.latitude, cd.timezone, cd.altidude)
-        H = make_horoscope(trans_cd)
-        win = tk.Toplevel()
-        win.title("Transit")
-        c = tk.Canvas(win, width=690, height=690, bg="white")
-        c.pack()
-        draw_fixed_rashi_chart(H, size=690, canvas_override=c)
 
-    tk.Button(top, text="Open Transit Chart", command=open_chart).pack(pady=8)
+        y += years
+        m += months
+        while m > 12:
+            m -= 12; y += 1
+        while m < 1:
+            m += 12; y -= 1
 
+        maxd = monthrange(y, m)[1]
+        d = min(d + days, maxd)
+        dt_entry.delete(0, tk.END)
+        dt_entry.insert(0, f"{d:02d}-{m:02d}-{y:04d}")
+        refresh_all()
+
+    ttk.Button(control, text="-Y", width=4, command=lambda: shift_date(years=-1)).pack(side="left")
+    ttk.Button(control, text="-M", width=4, command=lambda: shift_date(months=-1)).pack(side="left")
+    ttk.Button(control, text="-D", width=4, command=lambda: shift_date(days=-1)).pack(side="left")
+    ttk.Button(control, text="+D", width=4, command=lambda: shift_date(days=1)).pack(side="left")
+    ttk.Button(control, text="+M", width=4, command=lambda: shift_date(months=1)).pack(side="left")
+    ttk.Button(control, text="+Y", width=4, command=lambda: shift_date(years=1)).pack(side="left")
+
+    ttk.Button(control, text="Refresh", command=lambda: refresh_all()).pack(side="left", padx=10)
+
+    tk.Label(control, text="Speed (ms):").pack(side="left", padx=(10,2))
+    speed_var = tk.IntVar(value=500)
+    ttk.Scale(control, from_=50, to=2000, orient="horizontal",
+              variable=speed_var, length=120).pack(side="left")
+
+    tk.Label(control, text="Step (days):").pack(side="left", padx=(10,2))
+    step_var = tk.IntVar(value=1)
+    ttk.Scale(control, from_=1, to=30, orient="horizontal",
+              variable=step_var, length=120).pack(side="left")
+
+    is_playing = False
+    play_direction = 1
+
+    def autoplay_step():
+        nonlocal is_playing, play_direction
+        if not is_playing:
+            return
+        shift_date(days=play_direction * max(1, int(step_var.get())))
+        top.after(max(10, int(speed_var.get())), autoplay_step)
+
+    def start_play(direction):
+        nonlocal is_playing, play_direction
+        play_direction = direction
+        if not is_playing:
+            is_playing = True
+            autoplay_step()
+
+    def stop_play():
+        nonlocal is_playing
+        is_playing = False
+
+    ttk.Button(control, text="⏪", width=3, command=lambda: start_play(-1)).pack(side="left", padx=4)
+    ttk.Button(control, text="⏸", width=3, command=stop_play).pack(side="left", padx=2)
+    ttk.Button(control, text="⏩", width=3, command=lambda: start_play(1)).pack(side="left", padx=2)
+
+    # ------------------ MAIN AREA ------------------ #
+    wrapper = tk.Frame(top)
+    wrapper.pack(fill="both", expand=True)
+
+    left = tk.Frame(wrapper)
+    right = tk.Frame(wrapper)
+    left.pack(side="left", padx=5)
+    right.pack(side="right", padx=5)
+
+    left.grid_columnconfigure((0,1), weight=1)
+    right.grid_columnconfigure((0,1), weight=1)
+
+    natal_canv, transit_canv = [], []
+    natal_opts, transit_opts = [], []
+
+    # -------- 2×2 GRID BLOCK CREATOR -------- #
+    def create_block(parent, canv_list, opt_list):
+        for i in range(4):
+            r = i // 2
+            c = i % 2
+            f = tk.Frame(parent, pady=4, padx=4)
+            f.grid(row=r, column=c)
+
+            var = tk.StringVar()
+            box = ttk.Combobox(f, textvariable=var, state="readonly",
+                               values=[a for a, _ in ALL_DIVS], width=18)
+            box.current(0)
+            box.pack(side="top", pady=2)
+
+            ccanv = tk.Canvas(f, width=300, height=300, bg="white")
+            ccanv.pack()
+
+            canv_list.append(ccanv)
+            opt_list.append(var)
+
+    create_block(left, natal_canv, natal_opts)
+    create_block(right, transit_canv, transit_opts)
+
+    # ------------------ DRAW ENGINE ------------------ #
+    def get_transit_chart():
+        try:
+            d, m, y = map(int, dt_entry.get().split("-"))
+        except:
+            messagebox.showerror("Err", "Invalid date format")
+            return None
+
+        cd = horoscope.natal_chart
+        trans = chart_details(cd.name + " Transit", d, m, y,
+                              cd.hour, cd.minute, cd.second,
+                              cd.longitude, cd.latitude, cd.timezone, cd.altidude)
+        return make_horoscope(trans)
+
+    def draw_chart(h, canvas):
+        canvas.delete("all")
+        draw_fixed_rashi_chart(h, size=290, canvas_override=canvas)
+
+    def refresh_all():
+        trans = get_transit_chart()
+        if not trans:
+            return
+
+        for var, canvas in zip(natal_opts, natal_canv):
+            name = var.get()
+            fn = next(b for a, b in ALL_DIVS if a == name)
+            try:
+                dchart = fn(horoscope)
+                draw_chart(dchart, canvas)
+            except Exception as e:
+                canvas.delete("all")
+                canvas.create_text(150, 150, text=str(e), fill="red")
+
+        for var, canvas in zip(transit_opts, transit_canv):
+            name = var.get()
+            fn = next(b for a, b in ALL_DIVS if a == name)
+            try:
+                dchart = fn(trans)
+                draw_chart(dchart, canvas)
+            except Exception as e:
+                canvas.delete("all")
+                canvas.create_text(150, 150, text=str(e), fill="red")
+
+    refresh_all()
 
 # ------------------------------------------------
 # VIMSHOTTARI DASHA EXPLORER (USES CURRENT HOROSCOPE)

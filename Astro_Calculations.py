@@ -53,43 +53,50 @@ def _local_tz_from_chart(chart: chart_details) -> timezone:
     offset_hours = -chart.timezone        # your convention
     return timezone(timedelta(hours=offset_hours))
 
-
 def get_sunrise_decimal(chart: chart_details) -> float:
-    """LOCAL sunrise when Sun's CENTRE first becomes visible."""
-    observer = Observer(
-        latitude=chart.latitude,
-        longitude=chart.longitude,
-        elevation=getattr(chart, "altidude", 0.0),
-    )
-    tz = _local_tz_from_chart(chart)
+    """LOCAL sunrise when Sun's CENTRE first becomes visible.
+       If calculation fails → return 0.00 (00:00:00 dummy)."""
+    try:
+        observer = Observer(
+            latitude=chart.latitude,
+            longitude=chart.longitude,
+            elevation=getattr(chart, "altidude", 0.0),
+        )
+        tz = _local_tz_from_chart(chart)
 
-    sr_local = dawn(
-        observer,
-        date=date(chart.year, chart.month, chart.date),
-        tzinfo=tz,
-        depression=HALF_DISC_DEPRESSION     # <-- mid-disc SUNRISE
-    )
+        sr_local = dawn(
+            observer,
+            date=date(chart.year, chart.month, chart.date),
+            tzinfo=tz,
+            depression=HALF_DISC_DEPRESSION
+        )
+        return sr_local.hour + sr_local.minute / 60 + sr_local.second / 3600.0
 
-    return sr_local.hour + sr_local.minute / 60 + sr_local.second / 3600.0
-
-
+    except Exception as e:
+        # placeholder sunrise → 00:00:00
+        return 0.0
 def get_sunset_decimal(chart: chart_details) -> float:
-    """LOCAL sunset when Sun's CENTRE last disappears."""
-    observer = Observer(
-        latitude=chart.latitude,
-        longitude=chart.longitude,
-        elevation=getattr(chart, "altidude", 0.0),
-    )
-    tz = _local_tz_from_chart(chart)
+    """LOCAL sunset when Sun's CENTRE last becomes invisible.
+       If calculation fails → return 6.00 (06:00:00 dummy)."""
+    try:
+        observer = Observer(
+            latitude=chart.latitude,
+            longitude=chart.longitude,
+            elevation=getattr(chart, "altidude", 0.0),
+        )
+        tz = _local_tz_from_chart(chart)
 
-    ss_local = dusk(
-        observer,
-        date=date(chart.year, chart.month, chart.date),
-        tzinfo=tz,
-        depression=HALF_DISC_DEPRESSION     # <-- mid-disc SUNSET
-    )
+        ss_local = dusk(
+            observer,
+            date=date(chart.year, chart.month, chart.date),
+            tzinfo=tz,
+            depression=HALF_DISC_DEPRESSION
+        )
+        return ss_local.hour + ss_local.minute / 60 + ss_local.second / 3600.0
 
-    return ss_local.hour + ss_local.minute / 60 + ss_local.second / 3600.0
+    except Exception as e:
+        # placeholder sunset → 06:00:00
+        return 6.0
 
 
 # -------------------------------------------------------
@@ -148,7 +155,7 @@ def calculate_special_lagnas(chart: chart_details, sunrise_sun_long: float):
     result = []
     for name, speed in LAGNA_SPEEDS.items():
         # exact GUI formula: base_deg + (speed * elapsed + 30)
-        final = (sunrise_sun_long-sun_deg + (speed * elapsed )) % 360
+        final = (sunrise_sun_long+-sun_deg + (speed * elapsed )) % 360
         result.append(Planet.make(name, final, 0))
     return result
 
@@ -188,17 +195,12 @@ def make_horoscope(chart: chart_details):
     ketu = get_planet(chart, "Ketu")
 
     # ---- Sun at sunrise (if you really want sunrise Sun) ----
-    sunrise_dec = get_sunrise_decimal(chart)            # local
-    jd_sunrise_ut = sunrise_decimal_to_jd_ut(chart, sunrise_dec)
-    swe.set_topo(chart.longitude, chart.latitude, chart.altidude)
-    body_id = swe.SUN
-
-    rising_sun_long = swe.calc_ut(jd_sunrise_ut, body_id,
-                      swe.FLG_SWIEPH | swe.FLG_TRUEPOS | swe.FLG_SIDEREAL)[0][0]
-    # Use sunrise Sun longitude for special lagnas:
-    sun_long = rising_sun_long
-    special_lagnas = calculate_special_lagnas(chart, sun_long)
-
+    sunrise_dec=get_sunrise_decimal(chart)
+    rise_sun_time= swe.julday(chart.year, chart.month, chart.date,
+                       sunrise_dec + chart.timezone)
+    sun_rise_lon = swe.calc_ut(rise_sun_time, swe.SUN,
+                      swe.FLG_SWIEPH | swe.FLG_TRUEPOS | swe.FLG_SIDEREAL)[0][0] +1
+    special_lagnas=calculate_special_lagnas(chart,sun_rise_lon)
     horoscope_obj = Horror_scope(
         ascendant=asc,
         natal_chart=chart,
