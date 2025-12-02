@@ -1437,3 +1437,248 @@ def make_saptamsa_horoscope(d1: Horror_scope) -> Horror_scope:
         latitude=d1.latitude,
         special_lagnas=d7_special_lagnas
     )
+def make_d2_Jagannath_horoscope(d1: Horror_scope) -> Horror_scope:
+    """D2 — Hora chart using Kashinath table mapping"""
+
+    # Sign index mapping table (0 = Aries ... 11 = Pisces)
+    KASHINATH_D2 = {
+        0: ("Libra", "Taurus"),        # Aries
+        1: ("Taurus", "Scorpio"),      # Taurus
+        2: ("Sagittarius", "Gemini"),  # Gemini
+        3: ("Cancer", "Capricorn"),    # Cancer
+        4: ("Leo", "Aquarius"),        # Leo
+        5: ("Pisces", "Virgo"),        # Virgo
+        6: ("Libra", "Aries"),         # Libra
+        7: ("Taurus", "Scorpio"),      # Scorpio
+        8: ("Sagittarius", "Gemini"),  # Sagittarius
+        9: ("Leo", "Capricorn"),       # Capricorn
+        10: ("Cancer", "Aquarius"),    # Aquarius
+        11: ("Pisces", "Virgo"),       # Pisces
+    }
+
+    SIGN_TO_INDEX = {
+        "Aries": 0, "Taurus": 1, "Gemini": 2, "Cancer": 3,
+        "Leo": 4, "Virgo": 5, "Libra": 6, "Scorpio": 7,
+        "Sagittarius": 8, "Capricorn": 9, "Aquarius": 10, "Pisces": 11
+    }
+    INDEX_TO_SIGN = {v: k for k, v in SIGN_TO_INDEX.items()}
+
+    def d2_long(longitude):
+        lon = longitude % 360
+        rashi = int(lon // 30)                   # 0-11
+        inside = lon % 30                        # degrees in sign
+
+        # choose from mapping table
+        new_sign_name = KASHINATH_D2[rashi][0] if inside < 15 else KASHINATH_D2[rashi][1]
+        new_rashi = SIGN_TO_INDEX[new_sign_name]
+
+        # preserve degree proportion inside D2 sign
+        new_deg = (inside % 15) / 15 * 30       # 0–30° in new sign
+        return new_rashi * 30 + new_deg
+
+    def convert(planet: Planet):
+        return Planet.make(
+            planet.name,
+            d2_long(planet.planet_position.longitude),
+            planet.speed
+        )
+
+    # Ascendant
+    asc_lon = d2_long(
+        d1.ascendant.longitude if not hasattr(d1.ascendant, "planet_position")
+        else d1.ascendant.planet_position.longitude
+    )
+    asc = Planet.make("Ascendant", asc_lon, 0)
+
+    # convert special lagnas too
+    d2_special_lagnas = []
+    if hasattr(d1, "special_lagnas") and d1.special_lagnas is not None:
+        for sp in d1.special_lagnas:
+            d2_special_lagnas.append(
+                Planet.make(sp.name, d2_long(sp.planet_position.longitude), 0)
+            )
+
+    return Horror_scope(
+        ascendant=asc,
+        natal_chart=d1.natal_chart,
+        Sun=convert(d1.Sun),
+        Moon=convert(d1.Moon),
+        Mercury=convert(d1.Mercury),
+        Venus=convert(d1.Venus),
+        Mars=convert(d1.Mars),
+        Jupiter=convert(d1.Jupiter),
+        Saturn=convert(d1.Saturn),
+        Rahu=convert(d1.Rahu),
+        Ketu=convert(d1.Ketu),
+        weekday=d1.weekday,
+        date=d1.date,
+        month=d1.month,
+        year=d1.year,
+        hour=d1.hour,
+        minute=d1.minute,
+        second=d1.second,
+        longitude=d1.longitude,
+        latitude=d1.latitude,
+        special_lagnas=d2_special_lagnas
+    )
+
+
+
+def make_d2_Kashinath_horoscope(d1: Horror_scope) -> Horror_scope:
+
+
+    # 0 = Aries ... 11 = Pisces
+    KASHINATH_D2_HORA = {
+        0: (7, 0),   # Aries:     0–15° -> Scorpio,     15–30° -> Aries
+        1: (1, 6),   # Taurus:    0–15° -> Taurus,      15–30° -> Libra
+        2: (5, 2),   # Gemini:    0–15° -> Virgo,       15–30° -> Gemini
+        3: (3, 4),   # Cancer:    0–15° -> Cancer,      15–30° -> Leo
+        4: (4, 3),   # Leo:       0–15° -> Leo,         15–30° -> Cancer
+        5: (2, 5),   # Virgo:     0–15° -> Gemini,      15–30° -> Virgo
+        6: (6, 1),   # Libra:     0–15° -> Libra,       15–30° -> Taurus
+        7: (0, 7),   # Scorpio:   0–15° -> Aries,       15–30° -> Scorpio
+        8: (11, 8),  # Sagittarius: 0–15° -> Pisces,    15–30° -> Sagittarius
+        9: (9, 10),  # Capricorn: 0–15° -> Capricorn,   15–30° -> Aquarius
+        10: (10, 9), # Aquarius:  0–15° -> Aquarius,    15–30° -> Capricorn
+        11: (8, 11), # Pisces:    0–15° -> Sagittarius, 15–30° -> Pisces
+    }
+
+    def d2_long(longitude):
+        lon = longitude % 360
+        rashi = int(lon // 30)     # 0–11 sign index
+        inside = lon % 30          # degree inside sign
+
+        first, second = KASHINATH_D2_HORA[rashi]
+        new_rashi = first if inside < 15 else second
+
+        # Calculate degree inside D2 sign (0–30 scale)
+        if inside < 15:
+            percent = inside / 15          # 0–1
+        else:
+            percent = (inside - 15) / 15   # 0–1
+
+        new_deg = percent * 30             # convert to 0–30°
+
+        return new_rashi * 30 + new_deg
+
+    def convert(planet: Planet):
+        nl = d2_long(planet.planet_position.longitude)
+        return Planet.make(planet.name, nl, planet.speed * 2)
+
+    # Ascendant
+    asc_lon = d2_long(
+        d1.ascendant.longitude if not hasattr(d1.ascendant, "planet_position")
+        else d1.ascendant.planet_position.longitude
+    )
+    asc = Planet.make("Ascendant", asc_lon, 0)
+
+    # SPECIAL LAGNAS also transformed in D2
+    d2_special_lagnas = []
+    if hasattr(d1, "special_lagnas") and d1.special_lagnas is not None:
+        for sp in d1.special_lagnas:
+            slon = d2_long(sp.planet_position.longitude)
+            d2_special_lagnas.append(Planet.make(sp.name, slon, 0))
+
+    return Horror_scope(
+        ascendant=asc,
+        natal_chart=d1.natal_chart,
+        Sun=convert(d1.Sun),
+        Moon=convert(d1.Moon),
+        Mercury=convert(d1.Mercury),
+        Venus=convert(d1.Venus),
+        Mars=convert(d1.Mars),
+        Jupiter=convert(d1.Jupiter),
+        Saturn=convert(d1.Saturn),
+        Rahu=convert(d1.Rahu),
+        Ketu=convert(d1.Ketu),
+        weekday=d1.weekday,
+        date=d1.date,
+        month=d1.month,
+        year=d1.year,
+        hour=d1.hour,
+        minute=d1.minute,
+        second=d1.second,
+        longitude=d1.longitude,
+        latitude=d1.latitude,
+        special_lagnas=d2_special_lagnas
+    )
+
+
+def make_manduka_hora_horoscope(d1: Horror_scope) -> Horror_scope:
+    """D2 — Manduka Hora chart using 0–15° / 15–30° mapping"""
+
+    # 0 = Aries ... 11 = Pisces
+    MANDUKA_HORA = {
+        0: (0, 2),    # Aries:      0–15° -> Aries,      15–30° -> Gemini
+        1: (1, 3),    # Taurus:     0–15° -> Taurus,     15–30° -> Cancer
+        2: (2, 4),    # Gemini:     0–15° -> Gemini,     15–30° -> Leo
+        3: (3, 5),    # Cancer:     0–15° -> Cancer,     15–30° -> Virgo
+        4: (4, 6),    # Leo:        0–15° -> Leo,        15–30° -> Libra
+        5: (5, 7),    # Virgo:      0–15° -> Virgo,      15–30° -> Scorpio
+        6: (6, 8),    # Libra:      0–15° -> Libra,      15–30° -> Sagittarius
+        7: (7, 9),    # Scorpio:    0–15° -> Scorpio,    15–30° -> Capricorn
+        8: (8, 10),   # Sagittarius:0–15° -> Sagittarius,15–30° -> Aquarius
+        9: (9, 11),   # Capricorn:  0–15° -> Capricorn,  15–30° -> Pisces
+        10: (10, 0),  # Aquarius:   0–15° -> Aquarius,   15–30° -> Aries
+        11: (11, 1),  # Pisces:     0–15° -> Pisces,     15–30° -> Taurus
+    }
+
+    def d2_long(longitude):
+        lon = longitude % 360
+        rashi = int(lon // 30)      # 0–11 sign index
+        inside = lon % 30           # 0–30 inside sign
+
+        first, second = MANDUKA_HORA[rashi]
+        new_rashi = first if inside < 15 else second
+
+        # degree inside divison → 0–30 scale
+        if inside < 15:
+            percent = inside / 15
+        else:
+            percent = (inside - 15) / 15
+
+        new_deg = percent * 30      # 0–30° internal degree
+
+        return new_rashi * 30 + new_deg
+
+    def convert(planet: Planet):
+        nl = d2_long(planet.planet_position.longitude)
+        return Planet.make(planet.name, nl, planet.speed * 2)
+
+    # Ascendant
+    asc_lon = d2_long(
+        d1.ascendant.longitude if not hasattr(d1.ascendant, "planet_position")
+        else d1.ascendant.planet_position.longitude
+    )
+    asc = Planet.make("Ascendant", asc_lon, 0)
+
+    # Special Lagnas conversion
+    d2_special_lagnas = []
+    if hasattr(d1, "special_lagnas") and d1.special_lagnas is not None:
+        for sp in d1.special_lagnas:
+            slon = d2_long(sp.planet_position.longitude)
+            d2_special_lagnas.append(Planet.make(sp.name, slon, 0))
+
+    return Horror_scope(
+        ascendant=asc,
+        natal_chart=d1.natal_chart,
+        Sun=convert(d1.Sun),
+        Moon=convert(d1.Moon),
+        Mercury=convert(d1.Mercury),
+        Venus=convert(d1.Venus),
+        Mars=convert(d1.Mars),
+        Jupiter=convert(d1.Jupiter),
+        Saturn=convert(d1.Saturn),
+        Rahu=convert(d1.Rahu),
+        Ketu=convert(d1.Ketu),
+        weekday=d1.weekday,
+        date=d1.date,
+        month=d1.month,
+        year=d1.year,
+        hour=d1.hour,
+        minute=d1.minute,
+        second=d1.second,
+        longitude=d1.longitude,
+        latitude=d1.latitude,
+        special_lagnas=d2_special_lagnas
+    )
