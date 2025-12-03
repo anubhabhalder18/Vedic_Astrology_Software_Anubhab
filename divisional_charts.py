@@ -1226,147 +1226,6 @@ def make_d60_horoscope(d1: Horror_scope) -> Horror_scope:
         special_lagnas=d60_special_lagnas     # 🔥 added here
     )
 
-def make_d5_horoscope(d1: Horror_scope) -> Horror_scope:
-    """Return D5 (Panchamsa) chart as per Parashari method."""
-
-    D5_PART = 30 / 5  # 6 degrees per division
-
-    movable = [0, 3, 6, 9]       # Aries, Cancer, Libra, Capricorn
-    fixed   = [1, 4, 7, 10]      # Taurus, Leo, Scorpio, Aquarius
-    dual    = [2, 5, 8, 11]      # Gemini, Virgo, Sagittarius, Pisces
-
-    def d5_long(longitude):
-        lon = longitude % 360
-        rashi = int(lon // 30)                # base sign index 0–11
-        inside = lon % 30                     # degree inside base sign
-        part = int(inside // D5_PART)         # 0–4 five divisions inside sign
-
-        # Determine the FIRST Panchamsa sign based on nature
-        if rashi in movable:
-            first_sign = rashi
-        elif rashi in fixed:
-            first_sign = (rashi + 4) % 12     # 5th from sign = +4
-        else:
-            first_sign = (rashi + 8) % 12     # 9th from sign = +8
-
-        # Panchamsa sign = first sign + part ( cyclic order )
-        new_sign = (first_sign + part) % 12
-
-        # Degree inside part proportionally mapped to 0–30
-        inside_part = inside - part * D5_PART
-        percent = inside_part / D5_PART
-        d5_deg = percent * 30
-
-        return new_sign * 30 + d5_deg
-
-    def convert(planet: Planet):
-        nl = d5_long(planet.planet_position.longitude)
-        return Planet.make(planet.name, nl, planet.speed * 5)
-
-    asc_long = d5_long(
-        d1.ascendant.longitude if not hasattr(d1.ascendant, "planet_position")
-        else d1.ascendant.planet_position.longitude
-    )
-    asc = Planet.make("Ascendant", asc_long, 0)
-
-    return Horror_scope(
-        ascendant=asc,
-        natal_chart=d1.natal_chart,
-        Sun=convert(d1.Sun),
-        Moon=convert(d1.Moon),
-        Mercury=convert(d1.Mercury),
-        Venus=convert(d1.Venus),
-        Mars=convert(d1.Mars),
-        Jupiter=convert(d1.Jupiter),
-        Saturn=convert(d1.Saturn),
-        Rahu=convert(d1.Rahu),
-        Ketu=convert(d1.Ketu),
-        weekday=d1.weekday,
-        date=d1.date,
-        month=d1.month,
-        year=d1.year,
-        hour=d1.hour,
-        minute=d1.minute,
-        second=d1.second,
-        longitude=d1.longitude,
-        latitude=d1.latitude,
-    )
-
-from Data_Types import Planet, chart_details, Horror_scope, position
-
-def make_d5_horoscope(d1: Horror_scope) -> Horror_scope:
-    """Return D5 (Panchamsa) chart as per Parashari method with special lagnas included."""
-
-    D5_PART = 30 / 5  # 6 degrees per division
-
-    movable = [0, 3, 6, 9]       # Aries, Cancer, Libra, Capricorn
-    fixed   = [1, 4, 7, 10]      # Taurus, Leo, Scorpio, Aquarius
-    dual    = [2, 5, 8, 11]      # Gemini, Virgo, Sagittarius, Pisces
-
-    def d5_long(longitude):
-        lon = longitude % 360
-        rashi = int(lon // 30)                 # base sign 0–11
-        inside = lon % 30                      # 0–30° inside sign
-        part = int(inside // D5_PART)          # 0–4
-
-        # Starting Panchamsa sign
-        if rashi in movable:
-            first_sign = rashi
-        elif rashi in fixed:
-            first_sign = (rashi + 4) % 12      # 5th from sign
-        else:
-            first_sign = (rashi + 8) % 12      # 9th from sign
-
-        new_sign = (first_sign + part) % 12
-
-        inside_part = inside - part * D5_PART
-        percent = inside_part / D5_PART
-        d5_deg = percent * 30                 # 0–30°
-
-        return new_sign * 30 + d5_deg
-
-    def convert(pl: Planet):
-        nl = d5_long(pl.planet_position.longitude)
-        return Planet.make(pl.name, nl, pl.speed * 5)
-
-    # Ascendant conversion
-    asc_long = d5_long(
-        d1.ascendant.longitude if not hasattr(d1.ascendant, "planet_position")
-        else d1.ascendant.planet_position.longitude
-    )
-    asc = Planet.make("Ascendant", asc_long, 0)
-
-    # 🔥 SPECIAL LAGNAS — map only, do NOT recompute
-    d5_special_lagnas = []
-    if hasattr(d1, "special_lagnas") and d1.special_lagnas:
-        for sp in d1.special_lagnas:
-            slon = d5_long(sp.planet_position.longitude)
-            d5_special_lagnas.append(Planet.make(sp.name, slon, 0))
-
-    return Horror_scope(
-        ascendant=asc,
-        natal_chart=d1.natal_chart,
-        Sun=convert(d1.Sun),
-        Moon=convert(d1.Moon),
-        Mercury=convert(d1.Mercury),
-        Venus=convert(d1.Venus),
-        Mars=convert(d1.Mars),
-        Jupiter=convert(d1.Jupiter),
-        Saturn=convert(d1.Saturn),
-        Rahu=convert(d1.Rahu),
-        Ketu=convert(d1.Ketu),
-        weekday=d1.weekday,
-        date=d1.date,
-        month=d1.month,
-        year=d1.year,
-        hour=d1.hour,
-        minute=d1.minute,
-        second=d1.second,
-        longitude=d1.longitude,
-        latitude=d1.latitude,
-        special_lagnas=d5_special_lagnas      # 🔥 added here
-    )
-
 
 def make_saptamsa_horoscope(d1: Horror_scope) -> Horror_scope:
     """Return D7 (Saptamsa) chart as per commonly used Parashari rule."""
@@ -1681,4 +1540,182 @@ def make_manduka_hora_horoscope(d1: Horror_scope) -> Horror_scope:
         longitude=d1.longitude,
         latitude=d1.latitude,
         special_lagnas=d2_special_lagnas
+    )
+
+
+def make_d5_horoscope(d1: Horror_scope) -> Horror_scope:
+    """D5 — Panchamsa chart (Parashari method) with special lagnas included."""
+
+    # 0 = Aries ... 11 = Pisces
+    movable = [0, 3, 6, 9]       # Aries, Cancer, Libra, Capricorn
+    fixed   = [1, 4, 7, 10]      # Taurus, Leo, Scorpio, Aquarius
+    dual    = [2, 5, 8, 11]      # Gemini, Virgo, Sagittarius, Pisces
+
+    def d5_long(longitude):
+        lon = longitude % 360
+        rashi = int(lon // 30)            # 0–11 base sign
+        inside = lon % 30                 # 0–30 degrees
+
+        # Clamp for safety
+        if inside < 0:
+            inside = 0.0
+        elif inside >= 30:
+            inside = 29.999999
+
+        # Panchamsa part index (each 6°)
+        part = int(inside // 6)
+        if part > 4:
+            part = 4
+
+        # Determine first Panchamsa sign
+        if rashi in movable:
+            first_sign = rashi                 # same sign
+        elif rashi in fixed:
+            first_sign = (rashi + 4) % 12      # 5th from
+        else:
+            first_sign = (rashi + 8) % 12      # 9th from
+
+        # Panchamsa sign shift (direct order)
+        new_rashi = (first_sign + part) % 12
+
+        # Degree inside this 6° part mapped to 0–30°
+        inside_part = inside - part * 6
+        percent = inside_part / 6.0
+        new_deg = percent * 30.0
+
+        return new_rashi * 30 + new_deg
+
+    def convert(planet: Planet):
+        nl = d5_long(planet.planet_position.longitude)
+        return Planet.make(planet.name, nl, planet.speed * 5)
+
+    # Ascendant
+    asc_lon = d5_long(
+        d1.ascendant.longitude if not hasattr(d1.ascendant, "planet_position")
+        else d1.ascendant.planet_position.longitude
+    )
+    asc = Planet.make("Ascendant", asc_lon, 0)
+
+    # Special Lagnas conversion
+    d5_special_lagnas = []
+    if hasattr(d1, "special_lagnas") and d1.special_lagnas is not None:
+        for sp in d1.special_lagnas:
+            slon = d5_long(sp.planet_position.longitude)
+            d5_special_lagnas.append(Planet.make(sp.name, slon, 0))
+
+    return Horror_scope(
+        ascendant=asc,
+        natal_chart=d1.natal_chart,
+        Sun=convert(d1.Sun),
+        Moon=convert(d1.Moon),
+        Mercury=convert(d1.Mercury),
+        Venus=convert(d1.Venus),
+        Mars=convert(d1.Mars),
+        Jupiter=convert(d1.Jupiter),
+        Saturn=convert(d1.Saturn),
+        Rahu=convert(d1.Rahu),
+        Ketu=convert(d1.Ketu),
+        weekday=d1.weekday,
+        date=d1.date,
+        month=d1.month,
+        year=d1.year,
+        hour=d1.hour,
+        minute=d1.minute,
+        second=d1.second,
+        longitude=d1.longitude,
+        latitude=d1.latitude,
+        special_lagnas=d5_special_lagnas       # 🔥 EXACTLY LIKE YOUR D2
+    )
+
+
+def make_d5_hadda_horoscope(d1: Horror_scope) -> Horror_scope:
+    """D5 — Hadda Panchamsha chart using 5 equal 6° divisions with odd/even mapping.
+       (Most commonly used Panchamsha in modern software)
+    """
+
+    # Hadda Panchamsha mapping table
+    # Each entry: (odd_sign_result, even_sign_result)
+    # 0 = Aries ... 11 = Pisces
+    HADDA_TABLE = {
+        0:  (0, 1),     # 0–6°   → Aries / Taurus
+        1:  (10, 5),    # 6–12°  → Aquarius / Virgo
+        2:  (8, 11),    # 12–18° → Sagittarius / Pisces
+        3:  (2, 9),     # 18–24° → Gemini / Capricorn
+        4:  (6, 7),     # 24–30° → Libra / Scorpio
+    }
+    # part index: 0..4
+
+    def d5_long(longitude):
+        lon = longitude % 360
+        rashi = int(lon // 30)           # 0–11
+        inside = lon % 30                # 0–30°
+
+        # Clamp for stability
+        if inside < 0:
+            inside = 0.0
+        elif inside >= 30:
+            inside = 29.999999
+
+        # Determine 6° part
+        part = int(inside // 6)          # 0..4
+        if part > 4:
+            part = 4
+
+        # Odd/Even rashi rule:
+        if rashi % 2 == 0:               # odd sign indices
+            new_rashi = HADDA_TABLE[part][0]
+        else:                             # even sign indices
+            new_rashi = HADDA_TABLE[part][1]
+
+        # Degree inside 6° mapped proportionally to 0–30°
+        degree_in_part = inside - (part * 6)
+        pct = degree_in_part / 6.0
+        new_deg = pct * 30.0
+
+        return new_rashi * 30 + new_deg
+
+    # Convert planet to D5
+    def convert(pl: Planet):
+        new_long = d5_long(pl.planet_position.longitude)
+        return Planet.make(pl.name, new_long, pl.speed * 5)
+
+    # Ascendant:
+    asc_src = (d1.ascendant.longitude if not hasattr(d1.ascendant, "planet_position")
+               else d1.ascendant.planet_position.longitude)
+    asc_long = d5_long(asc_src)
+    asc = Planet.make("Ascendant", asc_long, 0)
+
+    # Special Lagnas:
+    d5_special_lagnas = []
+    if hasattr(d1, "special_lagnas") and d1.special_lagnas:
+        for sp in d1.special_lagnas:
+            slon = d5_long(sp.planet_position.longitude)
+            d5_special_lagnas.append(Planet.make(sp.name, slon, 0))
+
+    # Return full D5 chart:
+    return Horror_scope(
+        ascendant=asc,
+        natal_chart=d1.natal_chart,
+
+        Sun=convert(d1.Sun),
+        Moon=convert(d1.Moon),
+        Mercury=convert(d1.Mercury),
+        Venus=convert(d1.Venus),
+        Mars=convert(d1.Mars),
+        Jupiter=convert(d1.Jupiter),
+        Saturn=convert(d1.Saturn),
+        Rahu=convert(d1.Rahu),
+        Ketu=convert(d1.Ketu),
+
+        weekday=d1.weekday,
+        date=d1.date,
+        month=d1.month,
+        year=d1.year,
+        hour=d1.hour,
+        minute=d1.minute,
+        second=d1.second,
+        longitude=d1.longitude,
+        latitude=d1.latitude,
+
+        special_lagnas=d5_special_lagnas
     )

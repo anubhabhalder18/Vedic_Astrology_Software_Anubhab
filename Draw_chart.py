@@ -101,12 +101,24 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
         "Jupiter":"Ju","Saturn":"Sa","Rahu":"Ra","Ketu":"Ke"
     }
 
+    # ----------------------------------------------
+    # 🔥 Store (label, color) instead of only label
+    # ----------------------------------------------
     rc = {i: [] for i in range(12)}
-    rc[sign_index(h.ascendant)].append("As")
-    for p in labels:
-        rc[sign_index(getattr(h, p))].append(labels[p])
 
+    # Ascendant → always black
+    rc[sign_index(h.ascendant)].append(("As", "black"))
+
+    # Planets with retrograde (speed < 0) drawn BLUE
+    for p in labels:
+        pl = getattr(h, p)
+        lbl = labels[p]
+        color = "blue" if pl.speed < 0 else "black"
+        rc[sign_index(pl)].append((lbl, color))
+
+    # ----------------------------------------------
     # grid lines
+    # ----------------------------------------------
     for i in range(4):
         canvas.create_line(0, i * cell, size, i * cell, width=2)
         canvas.create_line(i * cell, 0, i * cell, size, width=2)
@@ -115,6 +127,7 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
     canvas.create_line(0, size, cell, 2 * cell, width=2)
     canvas.create_line(size, size, 2 * cell, 2 * cell, width=2)
 
+    # shapes for triangle blocks
     tri_bounds = {
         "UR": lambda x0,y0,x1,y1:(x0+0.55*cell,y0+0.05*cell,x1-0.05*cell,y0+0.40*cell),
         "LL": lambda x0,y0,x1,y1:(x0+0.05*cell,y1-0.45*cell,x0+0.45*cell,y1-0.05*cell),
@@ -125,13 +138,18 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
     LEFT = {4, 7}
     RIGHT = {5, 8}
 
+    # ----------------------------------------------
+    # Draw the chart with colors
+    # ----------------------------------------------
     for r in range(12):
         col, row, typ, tri = SH[r]
         items = rc[r]
         if not items:
             continue
+
         x0, y0 = col * cell, row * cell
         x1, y1 = x0 + cell, y0 + cell
+
         if typ == "rect":
             xmin = x0 + cell * RECT_MARGIN
             ymin = y0 + cell * RECT_MARGIN
@@ -145,16 +163,28 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
         fontsize = int((avail / (n + 0.8)) * 0.55)
         fontsize = max(10, min(fontsize, int(size * 0.07)))
         step = avail / (n + 0.8)
-        for i, lbl in enumerate(items):
+
+        for i, (lbl, color) in enumerate(items):
             yy = ymin + (i + 0.55) * step
             xx = (xmin + xmax) / 2
             anch = "center"
+
             if r in LEFT:
                 xx = xmin; anch = "w"
             if r in RIGHT:
                 xx = xmax; anch = "e"
-            canvas.create_text(xx, yy, text=lbl, font=("Arial", fontsize, "bold"), anchor=anch)
 
+            # 🔥 color applied here
+            canvas.create_text(
+                xx, yy, text=lbl,
+                fill=color,
+                font=("Arial", fontsize, "bold"),
+                anchor=anch
+            )
+
+    # ----------------------------------------------
+    # DETAILS WINDOW
+    # ----------------------------------------------
     def details(event=None):
         win = tk.Toplevel()
         win.title("Chart Details")
@@ -162,7 +192,6 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
 
         cols = ("Body", "Rashi-Deg-Min", "Nakshatra-Pada", "Speed")
 
-        # Frame + scrollbar + treeview
         frame = ttk.Frame(win)
         frame.pack(fill="both", expand=True)
 
@@ -177,7 +206,7 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
             tree.heading(c, text=c)
             tree.column(c, width=160, anchor="center")
 
-        # Ascendant
+        # ASCENDANT
         asc_pos = h.ascendant.planet_position
         tree.insert(
             "",
@@ -190,7 +219,7 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
             ),
         )
 
-        # Planets
+        # PLANETS
         order = ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Rahu", "Ketu"]
         for p in order:
             pl = getattr(h, p)
@@ -206,7 +235,7 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
                 ),
             )
 
-        # 🔥 Special Lagnas (only in details list, NOT drawn on chart)
+        # SPECIAL LAGNAS (list only, not drawn on chart)
         if hasattr(h, "special_lagnas") and h.special_lagnas:
             for sp in h.special_lagnas:
                 pos = sp.planet_position
@@ -217,7 +246,7 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
                         sp.name,
                         f"{pos.rashi} {pos.degree}°{pos.minute}'{pos.second:.2f}",
                         f"{pos.nakshatra} (Pada {pos.pada})",
-                        "",  # speed is conceptual / not needed here
+                        "",
                     ),
                 )
 
@@ -2457,7 +2486,8 @@ def start_chart_menu():
         "D144 Chart": tk.BooleanVar(value=False),
         "Jagannath D2 Chart": tk.BooleanVar(value=False),
         "Kashinath D2 Chart":tk.BooleanVar(value=False),
-        "Manduka D2 Hora":tk.BooleanVar(value=False)
+        "Manduka D2 Hora":tk.BooleanVar(value=False),
+        "Hadda d5 Chart":tk.BooleanVar(value=False),
     }
 
     # ============================================================
@@ -2505,7 +2535,8 @@ def start_chart_menu():
             ("D144 Chart", make_d144_horoscope(horoscope)),
             ("Jagannath D2 Chart",make_d2_Jagannath_horoscope(horoscope)),
             ("Kashinath D2 Chart",make_d2_Kashinath_horoscope(horoscope)),
-            ("Manduka D2 Hora",make_manduka_hora_horoscope(horoscope))
+            ("Manduka D2 Hora",make_manduka_hora_horoscope(horoscope)),
+            ("Hadda d5 Chart",make_d5_hadda_horoscope(horoscope))
         ]
 
         idx = 0
