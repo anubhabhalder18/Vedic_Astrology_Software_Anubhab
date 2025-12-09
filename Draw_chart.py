@@ -72,11 +72,212 @@ NAK_LEN = 360.0 / 27.0
 #draw north chart
 
 
+import tkinter as tk
+from tkinter import ttk
+import svgwrite
+import math
+from tksvg import SvgImage   # <-- IMPORTANT
+
+
+def draw_north_indian_chart1(h: Horror_scope, size=600, canvas_override=None):
+
+    # --------------------------------------------
+    # 1) Tkinter Canvas Setup
+    # --------------------------------------------
+    if canvas_override is not None:
+        canvas = canvas_override
+        win = canvas.winfo_toplevel()
+    else:
+        win = tk.Toplevel()
+        canvas = tk.Canvas(win, width=size, height=size, bg="white")
+        canvas.pack()
+
+    # --------------------------------------------
+    # 2) Planet labels + retrograde + ascendant
+    # --------------------------------------------
+    labels = {
+        "Sun": "Su", "Moon": "Mo", "Mercury": "Me", "Venus": "Ve",
+        "Mars": "Ma", "Jupiter": "Ju", "Saturn": "Sa",
+        "Rahu": "Ra", "Ketu": "Ke"
+    }
+
+    def sign_index(obj):
+        lon = obj.planet_position.longitude if hasattr(obj, "planet_position") else obj.longitude
+        return int((lon % 360) // 30)
+
+    rc = {i: [] for i in range(12)}
+
+    # Ascendant
+    rc[sign_index(h.ascendant)].append(("As", "black"))
+
+    # Planets
+    for p in labels:
+        pl = getattr(h, p)
+        lbl = labels[p]
+        color = "blue" if pl.speed < 0 else "black"
+        rc[sign_index(pl)].append((lbl, color))
+
+    # --------------------------------------------
+    # 3) Build SVG string in memory
+    # --------------------------------------------
+    dwg = svgwrite.Drawing(size=("100%", "100%"), profile="full")
+    dwg.attribs["viewBox"] = "0 0 400 350"
+
+    # HOUSE gradient
+    grad = svgwrite.gradients.LinearGradient((0, 0), (0, 1), id="grad")
+    grad.add_stop_color(0, "white")
+    grad.add_stop_color(1, "#f0f3bf")
+    dwg.defs.add(grad)
+
+    # NORTH INDIAN POLYGONS
+    POLYS = [
+        [(200,175),(300,250),(200,325),(100,250)],        
+        [(100,250),(200,325),(100,350),(0,275)],          
+        [(0,275),(100,350),(0,425),(-100,350)],          
+        [(100,250),(0,275),(-100,200),(0,150)],           
+        [(0,150),(-100,200),(0,75),(100,100)],            
+        [(100,100),(0,75),(100,0),(200,75)],              
+        [(200,75),(100,0),(200,-75),(300,0)],             
+        [(300,0),(200,-75),(300,-150),(400,-75)],         
+        [(400,-75),(300,-150),(400,-225),(500,-150)],     
+        [(300,0),(400,-75),(500,0),(400,75)],             
+        [(200,75),(300,0),(400,75),(300,150)],            
+        [(100,100),(200,75),(300,150),(200,175)]          
+    ]
+
+    # DRAW houses
+    for poly in POLYS:
+        dwg.add(
+            dwg.polygon(poly, fill="url(#grad)", stroke="black", stroke_width=2)
+        )
+
+    # Planet centers
+    CENTERS = [
+        (200,175),(140,260),(50,300),(40,200),
+        (80,130),(140,90),(200,60),(260,90),
+        (320,130),(360,200),(300,260),(240,130)
+    ]
+
+    radius = 22
+
+    # Place planets
+    for h_idx, (cx, cy) in enumerate(CENTERS):
+        items = rc[h_idx]
+        if not items:
+            continue
+
+        n = len(items)
+        for j, (lbl, color) in enumerate(items):
+            angle = 2 * math.pi * j / n
+            x = cx + radius * math.cos(angle)
+            y = cy + radius * math.sin(angle)
+
+            dwg.add(dwg.text(
+                lbl,
+                insert=(x, y),
+                font_size="14px",
+                fill=color
+            ))
+
+    # --------------------------------------------
+    # 4) Convert SVG (string) → Tkinter via tksvg
+    # --------------------------------------------
+    svg_string = dwg.tostring()
+
+    svg_img = SvgImage(data=svg_string)  # <-- This replaces Cairo PNG conversion
+
+    # Store ref to avoid garbage collection
+    win.chart_img = svg_img
+
+    # --------------------------------------------
+    # 5) Display image in Tkinter Canvas
+    # --------------------------------------------
+    canvas.delete("all")
+    canvas.create_image(size // 2, size // 2, image=svg_img)
+
+    # --------------------------------------------
+    # 6) DETAILS POPUP
+    # --------------------------------------------
+    def details(event=None):
+        w = tk.Toplevel()
+        w.title("Chart Details")
+        w.geometry("680x380")
+
+        cols = ("Body","Rashi-Deg-Min","Nakshatra-Pada","Speed")
+        frame = ttk.Frame(w)
+        frame.pack(fill="both", expand=True)
+
+        scrollbar = ttk.Scrollbar(frame, orient="vertical")
+        tree = ttk.Treeview(frame, columns=cols, show="headings",
+                            yscrollcommand=scrollbar.set)
+        scrollbar.config(command=tree.yview)
+
+        scrollbar.pack(side="right", fill="y")
+        tree.pack(side="left", fill="both", expand=True)
+
+        for c in cols:
+            tree.heading(c, text=c)
+            tree.column(c, width=160, anchor="center")
+
+        asc = h.ascendant.planet_position
+        tree.insert("", "end", values=(
+            "Asc",
+            f"{asc.rashi} {asc.degree}°{asc.minute}'{asc.second:.1f}",
+            f"{asc.nakshatra} (Pada {asc.pada})",
+            ""
+        ))
+
+        order = ["Sun","Moon","Mercury","Venus","Mars","Jupiter","Saturn","Rahu","Ketu"]
+        for p in order:
+            pos = getattr(h, p).planet_position
+            tree.insert("", "end", values=(
+                p,
+                f"{pos.rashi} {pos.degree}°{pos.minute}'{pos.second:.1f}",
+                f"{pos.nakshatra} (Pada {pos.pada})",
+                f"{getattr(h,p).speed:.3f}"
+            ))
+
+    canvas.bind("<Button-1>", details)
+
+    return canvas
+
+
+
 # ------------------------------------------------
 # DRAW FIXED East INDIAN CHART
 # ------------------------------------------------
+
+# ----------------------------------------------
+# Drekkana Nature Lookup Table
+# ----------------------------------------------
+DREKKANA_NATURE = {
+    1:  ["Ayudh/Chatuspad", "Chatushpad",        "Ayudh"],
+    2:  ["Chatus",          "Sarpa/Chatus",      "Chatushpad"],
+    3:  ["Chatus",          "Ayudh/Pakshi",      "Ayudh"],
+    4:  ["Chatus/Varaha",   "Sarpa",              "Sarpa"],
+    5:  ["Ayudh/Chatus/Pakshi", "Ayudh",          "Chatus/Ayudh"],
+    6:  ["Pakshi",          "Pakshi",             "Pakshi"],
+    7:  ["Pakshi",          "Pakshi",             "Chatushpad"],
+    8:  ["Sarpa",           "Sarpa/Pasha",        "Chatushpad"],
+    9:  ["Pakshi",          "Unknown",            "Ayudh"],
+    10: ["Chatus/Pakshi/Nigada", "Chatus",        "Chatus"],
+    11: ["Ayudh",           "Ayudh",              "Ayudh"],
+    12: ["Ayudh",           "Ayudh",              "Sarpa"],
+}
+
+# ----------------------------------------------
+# ✅ Required Helper Function (MISSING EARLIER)
+# ----------------------------------------------
+def get_drekkana_from_longitude(lon):
+    lon = lon % 360
+    sign_no = int(lon // 30) + 1
+    inside = lon % 30
+    drekkana_no = int(inside // 10) + 1
+    nature = DREKKANA_NATURE[sign_no][drekkana_no - 1]
+    return drekkana_no, nature, sign_no
+
 def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
-    # canvas override system
+
     if canvas_override is not None:
         canvas = canvas_override
     else:
@@ -101,46 +302,36 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
         "Jupiter":"Ju","Saturn":"Sa","Rahu":"Ra","Ketu":"Ke"
     }
 
-    # ----------------------------------------------
-    # 🔥 Store (label, color) instead of only label
-    # ----------------------------------------------
     rc = {i: [] for i in range(12)}
 
-    # Ascendant → always black
     rc[sign_index(h.ascendant)].append(("As", "black"))
 
-    # Planets with retrograde (speed < 0) drawn BLUE
     for p in labels:
         pl = getattr(h, p)
         lbl = labels[p]
         color = "blue" if pl.speed < 0 else "black"
         rc[sign_index(pl)].append((lbl, color))
 
-    # ----------------------------------------------
-    # grid lines
-    # ----------------------------------------------
     for i in range(4):
         canvas.create_line(0, i * cell, size, i * cell, width=2)
         canvas.create_line(i * cell, 0, i * cell, size, width=2)
+
     canvas.create_line(0, 0, cell, cell, width=2)
     canvas.create_line(size, 0, 2 * cell, cell, width=2)
     canvas.create_line(0, size, cell, 2 * cell, width=2)
     canvas.create_line(size, size, 2 * cell, 2 * cell, width=2)
 
-    # shapes for triangle blocks
     tri_bounds = {
         "UR": lambda x0,y0,x1,y1:(x0+0.55*cell,y0+0.05*cell,x1-0.05*cell,y0+0.40*cell),
         "LL": lambda x0,y0,x1,y1:(x0+0.05*cell,y1-0.45*cell,x0+0.45*cell,y1-0.05*cell),
         "LR": lambda x0,y0,x1,y1:(x1-0.45*cell,y1-0.45*cell,x1-0.05*cell,y1-0.05*cell),
         "UL": lambda x0,y0,x1,y1:(x0+0.05*cell,y0+0.05*cell,x0+0.45*cell,y0+0.45*cell)
     }
+
     RECT_MARGIN = 0.10
     LEFT = {4, 7}
     RIGHT = {5, 8}
 
-    # ----------------------------------------------
-    # Draw the chart with colors
-    # ----------------------------------------------
     for r in range(12):
         col, row, typ, tri = SH[r]
         items = rc[r]
@@ -174,7 +365,6 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
             if r in RIGHT:
                 xx = xmax; anch = "e"
 
-            # 🔥 color applied here
             canvas.create_text(
                 xx, yy, text=lbl,
                 fill=color,
@@ -182,9 +372,9 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
                 anchor=anch
             )
 
-    # ----------------------------------------------
-    # DETAILS WINDOW
-    # ----------------------------------------------
+    # -------------------------------
+    # LEFT CLICK → DETAILS WINDOW
+    # -------------------------------
     def details(event=None):
         win = tk.Toplevel()
         win.title("Chart Details")
@@ -250,7 +440,41 @@ def draw_fixed_rashi_chart(h: Horror_scope, size=600, canvas_override=None):
                     ),
                 )
 
+    
+
+    # -------------------------------
+    # RIGHT CLICK → 🔥 DREKKANA POPUP
+    # -------------------------------
+    def drekkana_popup(event=None):
+        win = tk.Toplevel()
+        win.title("Drekkana Nature")
+        win.geometry("640x360")
+
+        cols = ("Body", "Sign", "Drekkana", "Nature")
+        tree = ttk.Treeview(win, columns=cols, show="headings")
+        tree.pack(fill="both", expand=True)
+
+        for c in cols:
+            tree.heading(c, text=c)
+            tree.column(c, width=150, anchor="center")
+
+        def insert_obj(name, obj):
+            lon = obj.planet_position.longitude
+            dno, nature, sign = get_drekkana_from_longitude(lon)
+            tree.insert("", "end", values=(name, sign, dno, nature))
+
+        insert_obj("Asc", h.ascendant)
+
+        order = ["Sun","Moon","Mercury","Venus","Mars","Jupiter","Saturn","Rahu","Ketu"]
+        for p in order:
+            insert_obj(p, getattr(h, p))
+
+        if hasattr(h, "special_lagnas") and h.special_lagnas:
+            for sp in h.special_lagnas:
+                insert_obj(sp.name, sp)
+
     canvas.bind("<Button-1>", details)
+    canvas.bind("<Button-3>", drekkana_popup)
 
 # ------------------------------------------------
 # SAVE / LOAD .AST CHARTS
@@ -850,11 +1074,15 @@ def open_transit_tab(root, horoscope: "Horror_scope"):
 # ------------------------------------------------
 # VIMSHOTTARI DASHA EXPLORER (USES CURRENT HOROSCOPE)
 # ------------------------------------------------
+# ------------------------------------------------
+# VIMSHOTTARI DASHA EXPLORER (USES CURRENT HOROSCOPE)
+# ------------------------------------------------
 def create_vimshottari_window(parent):
     global horoscope
     if horoscope is None:
         messagebox.showerror("No Chart", "No horoscope loaded.")
         return
+
     d1: Horror_scope = horoscope
 
     win = tk.Toplevel(parent)
@@ -872,8 +1100,10 @@ def create_vimshottari_window(parent):
     input_frame = ttk.LabelFrame(right_frame, text="Input")
     input_frame.pack(fill="x", padx=8, pady=6)
 
-    labels = ["Moon Sign (1-12)", "Moon Degree (0-30)", "Moon Minute",
-              "Birth Day", "Birth Month", "Birth Year"]
+    labels = [
+        "Moon Sign (1-12)", "Moon Degree (0-30)", "Moon Minute",
+        "Birth Day", "Birth Month", "Birth Year", "Dasha Period (Days/Year)"
+    ]
 
     find_index = {
         "Aries":1,"Taurus":2,"Gemini":3,"Cancer":4,"Leo":5,"Virgo":6,
@@ -882,24 +1112,46 @@ def create_vimshottari_window(parent):
 
     moon_pos = d1.Moon.planet_position
     nc = d1.natal_chart
+
     defaults = [
-        find_index[moon_pos.rashi],
-        moon_pos.degree,
-        moon_pos.minute,
-        nc.date,
-        nc.month,
-        nc.year
+        find_index.get(moon_pos.rashi, 1),
+        float(moon_pos.degree),
+        float(moon_pos.minute),
+        int(nc.date),
+        int(nc.month),
+        int(nc.year),
+        365.256363004
     ]
 
     entries = []
     for i, (lab, default) in enumerate(zip(labels, defaults)):
-        ttk.Label(input_frame, text=lab).grid(row=i // 3, column=(i % 3) * 2, padx=5, pady=4, sticky="e")
-        e = ttk.Entry(input_frame, width=8)
+        ttk.Label(input_frame, text=lab).grid(
+            row=i // 3, column=(i % 3) * 2, padx=5, pady=4, sticky="e"
+        )
+        e = ttk.Entry(input_frame, width=10)
         e.insert(0, str(default))
         e.grid(row=i // 3, column=(i % 3) * 2 + 1, padx=5, pady=4, sticky="w")
         entries.append(e)
 
-    entry_sign, entry_deg, entry_min, entry_day, entry_month, entry_year = entries
+    (
+        entry_sign, entry_deg, entry_min,
+        entry_day, entry_month, entry_year,
+        entry_dasha_period
+    ) = entries
+
+    def get_input_values():
+        try:
+            sign = int(entry_sign.get())
+            deg = float(entry_deg.get())
+            mins = float(entry_min.get())
+            day = int(entry_day.get())
+            month = int(entry_month.get())
+            year = int(entry_year.get())
+            dasha_period = float(entry_dasha_period.get())
+            return sign, deg, mins, day, month, year, dasha_period
+        except Exception:
+            messagebox.showerror("Invalid Input", "Check all input values.")
+            return None
 
     # ─ Tree (left)
     tree_frame = ttk.Frame(left_frame)
@@ -919,6 +1171,7 @@ def create_vimshottari_window(parent):
     detail_text = tk.Text(detail_frame, wrap="word")
     detail_scroll = ttk.Scrollbar(detail_frame, orient="vertical", command=detail_text.yview)
     detail_text.configure(yscrollcommand=detail_scroll.set)
+
     detail_text.pack(side="left", fill="both", expand=True)
     detail_scroll.pack(side="right", fill="y")
 
@@ -929,9 +1182,11 @@ def create_vimshottari_window(parent):
     node_data = {}
 
     # ---- Core functions ----
+
     def get_nakshatra(sign, deg, mins):
         total = (sign - 1) * 30 + deg + mins / 60.0
         index = int(total // NAK_LEN)
+        index = max(0, min(index, 26))   # safety
         part = total - index * NAK_LEN
         return NAKSHATRA_LIST[index], NAK_LORDS[index], part
 
@@ -939,85 +1194,98 @@ def create_vimshottari_window(parent):
         i = VIMSHOTTARI_ORDER.index(start_lord)
         return VIMSHOTTARI_ORDER[i:] + VIMSHOTTARI_ORDER[:i]
 
-    def calculate_dasha_periods(start, lord_seq, years_dict):
+    def calculate_dasha_periods(start, lord_seq, years_dict, dasha_period):
         periods = []
         current = start
         for lord in lord_seq:
             yrs = years_dict[lord]
-            end = current + timedelta(days=yrs * 365.25)
+            in_days = yrs * dasha_period
+            end = current + timedelta(days=in_days)
             periods.append((lord, current, end))
             current = end
         return periods
 
     def compute_antardasha(maha_lord, start, end):
         seq = generate_dasha_sequence(maha_lord)
-        total_years = DASHA_YEARS[maha_lord]
+        total_days = (end - start).total_seconds() / 86400.0
         res = []
         current = start
+
         for lord in seq:
             proportion = DASHA_YEARS[lord] / 120.0
-            span = total_years * proportion * 365.25
+            span = total_days * proportion
             e = current + timedelta(days=span)
             res.append((lord, current, e))
             current = e
+
         return res
 
     def compute_pratyantardasha(antar_lord, start, end):
         seq = generate_dasha_sequence(antar_lord)
-        full_days = (end - start).total_seconds() / (24 * 3600)
-        antar_total_years = full_days / 365.25
+        full_days = (end - start).total_seconds() / 86400.0
         res = []
         current = start
+
         for lord in seq:
             proportion = DASHA_YEARS[lord] / 120.0
-            span = antar_total_years * proportion * 365.25
+            span = full_days * proportion
             e = current + timedelta(days=span)
             res.append((lord, current, e))
             current = e
+
         return res
 
     def compute_progression(start, end, deg0=0.0, parts=12):
-        total_days = (end - start).total_seconds() / (24 * 3600)
+        total_days = (end - start).total_seconds() / 86400.0
         first = total_days * ((30.0 - deg0) / 30.0) / parts
         left = total_days - first
         step = left / (parts - 1) if parts > 1 else left
+
         res = []
         cur = start
+
         for i in range(parts):
             span = first if i == 0 else step
             e = cur + timedelta(days=span)
             res.append((f"Part {i + 1}", cur, e))
             cur = e
+
         return res
 
     # ---- Build Mahadasha tree ----
     def build_mahadasha_tree():
-        try:
-            sign = int(entry_sign.get())
-            deg = float(entry_deg.get())
-            mins = float(entry_min.get())
-            d = int(entry_day.get())
-            m = int(entry_month.get())
-            y = int(entry_year.get())
-        except Exception:
-            messagebox.showerror("Error", "Invalid Moon / birth input.")
+        vals = get_input_values()
+        if vals is None:
             return
 
-        birth = datetime(y, m, d)
+        sign, deg, mins, d, m, y, dasha_period = vals
+
+        try:
+            birth = datetime(y, m, d)
+        except Exception:
+            messagebox.showerror("Error", "Invalid birth date.")
+            return
+
         nak, lord, nak_deg = get_nakshatra(sign, deg, mins)
         seq = generate_dasha_sequence(lord)
 
+        # fraction of current lord's mahadasha already elapsed
         elapsed_years = DASHA_YEARS[lord] * (nak_deg / NAK_LEN)
-        start = birth - timedelta(days=elapsed_years * 365.25)
+        # use user-specified dasha_period instead of hardcoded 365.25
+        start = birth - timedelta(days=elapsed_years * dasha_period)
 
-        mahadashas = calculate_dasha_periods(start, seq, DASHA_YEARS)
+        # ❗ FIX: pass dasha_period as 4th argument
+        mahadashas = calculate_dasha_periods(start, seq, DASHA_YEARS, dasha_period)
 
+        # clear tree & details
         for item in tree.get_children():
             tree.delete(item)
         node_data.clear()
         detail_text.delete("1.0", "end")
-        detail_text.insert("end", f"Moon → {nak} (Lord {lord}) | Offset {nak_deg:.2f}°\n\n")
+        detail_text.insert("end", f"Moon → {nak} (Lord {lord}) | Offset {nak_deg:.2f}°\n"
+                                  f"Dasha Period (days/year): {dasha_period}\n\n")
 
+        # populate main mahadashas
         for lord2, s, e in mahadashas:
             nid = tree.insert("", "end", text=f"{lord2}: {s:%Y-%m-%d} → {e:%Y-%m-%d}")
             node_data[nid] = {"type": "maha", "lord": lord2, "start": s, "end": e}
@@ -1049,10 +1317,12 @@ def create_vimshottari_window(parent):
         detail_text.delete("1.0", "end")
         if not data:
             return
-        detail_text.insert("end",
-                           f"{data['type'].title()}\nLord: {data['lord']}\n"
-                           f"Start: {data['start']}\nEnd:   {data['end']}\n\n"
-                           f"Use Progression panel to subdivide this period.\n")
+        detail_text.insert(
+            "end",
+            f"{data['type'].title()}\nLord: {data['lord']}\n"
+            f"Start: {data['start']}\nEnd:   {data['end']}\n\n"
+            f"Use Progression panel to subdivide this period.\n"
+        )
 
     # ---------- PROGRESSION PANEL -------------
     prog_frame = ttk.LabelFrame(right_frame, text="Progression Calculator")
@@ -1106,8 +1376,8 @@ def create_vimshottari_window(parent):
             return _next
         ent.bind("<Return>", bind_next(idx))
 
+    # initial build with defaults
     build_mahadasha_tree()
-
 
 from divisional_charts import *
 
@@ -2467,6 +2737,7 @@ def start_chart_menu():
     chart_flags = {
         "D1 Birth Chart": tk.BooleanVar(value=True),
         "D9 Navamasa Chart": tk.BooleanVar(value=True),
+        "D3 Varanasi Drekkna":tk.BooleanVar(value=False),
         "D3 Drekkana": tk.BooleanVar(value=True),
         "D4 Chart": tk.BooleanVar(value=True),
         "D5 Chart": tk.BooleanVar(value=True),
@@ -2488,6 +2759,8 @@ def start_chart_menu():
         "Kashinath D2 Chart":tk.BooleanVar(value=False),
         "Manduka D2 Hora":tk.BooleanVar(value=False),
         "Hadda d5 Chart":tk.BooleanVar(value=False),
+        "D2 Male Female Hora":tk.BooleanVar(value=False),
+       
     }
 
     # ============================================================
@@ -2517,6 +2790,7 @@ def start_chart_menu():
             ("D1 Birth Chart", horoscope),
             ("D9 Navamasa Chart",make_navamsa_horoscope(horoscope)),
             ("D3 Drekkana", make_drekkana_horoscope(horoscope)),
+            ("D3 Varanasi Drekkna",make_varanasi_drekkana_horoscope(horoscope)),
             ("D4 Chart", make_d4_horoscope(horoscope)),
             ("D5 Chart", make_d5_horoscope(horoscope)),
             ("D7 Chart", make_saptamsa_horoscope(horoscope)),
@@ -2536,7 +2810,9 @@ def start_chart_menu():
             ("Jagannath D2 Chart",make_d2_Jagannath_horoscope(horoscope)),
             ("Kashinath D2 Chart",make_d2_Kashinath_horoscope(horoscope)),
             ("Manduka D2 Hora",make_manduka_hora_horoscope(horoscope)),
-            ("Hadda d5 Chart",make_d5_hadda_horoscope(horoscope))
+            ("Hadda d5 Chart",make_d5_hadda_horoscope(horoscope)),
+            ("D2 Male Female Hora",make_d2_male_female_horoscope(horoscope)),
+            
         ]
 
         idx = 0
@@ -2655,8 +2931,27 @@ def start_chart_menu():
 # ------------------------------------------------
 # DEMO ENTRY
 # ------------------------------------------------
+from datetime import datetime
+
 if __name__ == "__main__":
-    cd = chart_details("a", 18, 3, 2004, 22, 4, 44, 88.36666, 22.56666, -5.5, 0.0)
+
+    # Get current date & time
+    now = datetime.now()
+
+    cd = chart_details(
+        "a",
+        now.day,
+        now.month,
+        now.year,
+        now.hour,
+        now.minute,
+        now.second,
+        88.36666,    # longitude (UNCHANGED)
+        22.56666,    # latitude (UNCHANGED)
+        -5.5,        # timezone (UNCHANGED)
+        0.0
+    )
+
     H = make_horoscope(cd)
     horoscope = H
     start_chart_menu()
